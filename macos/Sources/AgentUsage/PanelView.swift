@@ -25,6 +25,7 @@ struct PanelState {
 struct PanelActions {
     var refresh: () -> Void = {}
     var openAgent: () -> Void = {}
+    var openSettings: () -> Void = {}
     var select: (String) -> Void = { _ in }
     var footer: () -> Void = {}
 }
@@ -237,6 +238,7 @@ struct Hero: View {
             if let hint = model.state.launchHint {
                 ActionButton(symbol: "terminal", hint: hint, model: model, action: model.actions.openAgent)
             }
+            ActionButton(symbol: "gearshape", hint: "Settings", model: model, action: model.actions.openSettings)
         }
     }
 }

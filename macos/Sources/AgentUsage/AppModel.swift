@@ -10,6 +10,7 @@ final class AppModel {
     var onRecordsChange: (() -> Void)?
     /// Something went wrong that the panel should show, even when it's closed.
     var onNotice: (() -> Void)?
+    var onOpenSettings: (() -> Void)?
 
     private(set) var providers: [AgentRecord] = []
     private var records: [AgentRecord] = []
@@ -24,8 +25,19 @@ final class AppModel {
     private var reloadScheduled = false
     private var timers: [Timer] = []
     private var retryTimer: Timer?
+    private var releaseTimer: Timer?
+    private var observers: [(NotificationCenter, NSObjectProtocol)] = []
+    private var appliedSettings: [String] = []
+    /// GNOME switches extensions off while the screen is locked; here the
+    /// timers just don't check then.
+    private var locked = false
 
     static let retrySeconds: TimeInterval = 30
+    /// After waking from sleep, give the network a moment before checking.
+    static let wakeDelaySeconds: TimeInterval = 5
+    /// New releases: once a day, starting a minute after launch.
+    static let releaseCheckSeconds: TimeInterval = 24 * 3600
+    static let firstReleaseCheckSeconds: TimeInterval = 60
 
     init() {
         let base = ProcessInfo.processInfo.environment
@@ -39,18 +51,22 @@ final class AppModel {
         panel.actions = PanelActions(
             refresh: { [weak self] in self?.runUpdate(.force) },
             openAgent: { [weak self] in self?.launchAgent() },
+            openSettings: { [weak self] in self?.onOpenSettings?() },
             select: { [weak self] in self?.select($0) },
-            footer: {}
+            footer: { [weak self] in self?.onOpenSettings?() }
         )
-        Log.write("started: python \(python ?? "missing"), collectors \(collectors.map(\.agent)), records in \(usageDir)")
+        Log.write("started \(AppInfo.version): python \(python ?? "missing"), collectors \(collectors.map(\.agent)), records in \(usageDir)")
     }
 
     func start() {
         try? FileManager.default.createDirectory(atPath: usageDir, withIntermediateDirectories: true)
         reload()
         watch()
+        observeSystem()
+        appliedSettings = settingsKey
         runUpdate(.normal)
         restartTimers()
+        restartReleaseChecks()
     }
 
     // ------------------------------------------------------------ data
@@ -105,6 +121,13 @@ final class AppModel {
         panel.state.running = queue.running
     }
 
+    /// The timers' updates, which wait while the screen is locked.
+    private func runScheduled(_ kind: UpdateKind, agents: [String] = []) {
+        if !locked {
+            runUpdate(kind, agents: agents)
+        }
+    }
+
     private func start(_ request: UpdateRequest) {
         guard let python else {
             return
@@ -143,21 +166,92 @@ final class AppModel {
         }
         retryTimer = Timer.scheduledTimer(withTimeInterval: Self.retrySeconds, repeats: false) { [weak self] _ in
             self?.retryTimer = nil
-            self?.runUpdate(.limits, agents: agents)
+            self?.runScheduled(.limits, agents: agents)
         }
     }
 
     /// Two cadences: the cheap limits check keeps the menu bar percentage
     /// live, and the slower full pass rescans transcripts for the token charts.
-    func restartTimers() {
+    private func restartTimers() {
         timers.forEach { $0.invalidate() }
         let defaults = UserDefaults.standard
-        let limits = max(30, defaults.object(forKey: "limitsInterval") as? Int ?? 300)
-        let scan = 60 * max(5, defaults.object(forKey: "scanInterval") as? Int ?? 15)
+        let limits = max(30, defaults.integer(forKey: Settings.limitsInterval))
+        let scan = 60 * max(5, defaults.integer(forKey: Settings.scanInterval))
         timers = [
-            Timer.scheduledTimer(withTimeInterval: TimeInterval(limits), repeats: true) { [weak self] _ in self?.runUpdate(.limits) },
-            Timer.scheduledTimer(withTimeInterval: TimeInterval(scan), repeats: true) { [weak self] _ in self?.runUpdate(.normal) },
+            Timer.scheduledTimer(withTimeInterval: TimeInterval(limits), repeats: true) { [weak self] _ in self?.runScheduled(.limits) },
+            Timer.scheduledTimer(withTimeInterval: TimeInterval(scan), repeats: true) { [weak self] _ in self?.runScheduled(.normal) },
         ]
+    }
+
+    // ------------------------------------------------------------ system
+
+    private func observeSystem() {
+        let workspace = NSWorkspace.shared.notificationCenter
+        let distributed = DistributedNotificationCenter.default()
+        observe(workspace, NSWorkspace.didWakeNotification) { [weak self] in self?.woke() }
+        // Undocumented, but what every Mac app that cares uses.
+        observe(distributed, Notification.Name("com.apple.screenIsLocked")) { [weak self] in self?.locked = true }
+        observe(distributed, Notification.Name("com.apple.screenIsUnlocked")) { [weak self] in
+            self?.locked = false
+            self?.runUpdate(.normal)
+        }
+        observe(NotificationCenter.default, UserDefaults.didChangeNotification) { [weak self] in self?.settingsChanged() }
+    }
+
+    private func observe(_ center: NotificationCenter, _ name: Notification.Name, _ handler: @escaping () -> Void) {
+        let token = center.addObserver(forName: name, object: nil, queue: .main) { _ in handler() }
+        observers.append((center, token))
+    }
+
+    private func woke() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.wakeDelaySeconds) { [weak self] in
+            self?.runScheduled(.normal)
+        }
+    }
+
+    // ------------------------------------------------------------ settings
+
+    private var settingsKey: [String] {
+        let defaults = UserDefaults.standard
+        return [Settings.limitsInterval, Settings.scanInterval, Settings.checkUpdates].map { "\(defaults.object(forKey: $0) ?? "")" }
+    }
+
+    /// Changes apply right away, as in GNOME's settings.
+    private func settingsChanged() {
+        refreshLaunchHint()
+        let key = settingsKey
+        guard key != appliedSettings else {
+            return
+        }
+        appliedSettings = key
+        restartTimers()
+        restartReleaseChecks()
+    }
+
+    private func restartReleaseChecks() {
+        releaseTimer?.invalidate()
+        releaseTimer = nil
+        guard UserDefaults.standard.bool(forKey: Settings.checkUpdates), AppInfo.repository != nil else {
+            panel.state.newRelease = nil
+            return
+        }
+        releaseTimer = Timer.scheduledTimer(withTimeInterval: Self.firstReleaseCheckSeconds, repeats: false) { [weak self] _ in
+            self?.checkForRelease()
+            self?.releaseTimer = Timer.scheduledTimer(withTimeInterval: Self.releaseCheckSeconds, repeats: true) { [weak self] _ in
+                self?.checkForRelease()
+            }
+        }
+    }
+
+    private func checkForRelease() {
+        ReleaseChecker.latest { [weak self] result in
+            switch result {
+            case .success(let latest):
+                self?.panel.state.newRelease = Versions.isNewer(latest, than: AppInfo.version) ? latest : nil
+            case .failure(let error):
+                Log.write("release check: \(error.message)")
+            }
+        }
     }
 
     // ------------------------------------------------------------ panel
@@ -192,16 +286,6 @@ final class AppModel {
 
     // ------------------------------------------------------------ agent
 
-    var launchPrefs: LaunchPrefs {
-        let defaults = UserDefaults.standard
-        return LaunchPrefs(
-            agent: defaults.string(forKey: "agent") ?? "opencode",
-            agentCommand: defaults.string(forKey: "agentCommand") ?? "",
-            terminal: defaults.string(forKey: "terminal") ?? "auto",
-            terminalCommand: defaults.string(forKey: "terminalCommand") ?? ""
-        )
-    }
-
     var machine: Machine {
         let home = self.home
         return Machine.local(findApp: { terminal in
@@ -211,14 +295,17 @@ final class AppModel {
     }
 
     private func refreshLaunchHint() {
-        panel.state.launchHint = Terminals.buttonHint(Terminals.resolveLaunch(launchPrefs, on: machine))
+        let hint = Terminals.buttonHint(Terminals.resolveLaunch(Settings.launchPrefs, on: machine))
+        if panel.state.launchHint != hint {
+            panel.state.launchHint = hint
+        }
     }
 
     func launchAgent() {
-        switch Terminals.resolveLaunch(launchPrefs, on: machine) {
+        switch Terminals.resolveLaunch(Settings.launchPrefs, on: machine) {
         case .success(let launch):
             do {
-                try Launcher.run(launch)
+                try Launcher.run(argv: launch.argv, script: launch.script, name: launch.agentName)
             } catch {
                 show("Couldn't open \(launch.agentName): \(error.localizedDescription)")
             }
@@ -234,16 +321,16 @@ final class AppModel {
     }
 }
 
-/// Starts a launch: writes its `.command` script first, for the terminals
+/// Starts a launch, writing its `.command` script first for the terminals
 /// that open one.
 enum Launcher {
-    static func run(_ launch: Launch) throws {
-        var argv = launch.argv
-        if let script = launch.script {
+    static func run(argv: [String], script: String?, name: String) throws {
+        var argv = argv
+        if let script {
             let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("AgentUsage")
             try FileManager.default.createDirectory(at: caches, withIntermediateDirectories: true)
             // The file name is what the terminal window's title shows.
-            let file = caches.appendingPathComponent("\(launch.agentName).command")
+            let file = caches.appendingPathComponent("\(name).command")
             try script.write(to: file, atomically: true, encoding: .utf8)
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: file.path)
             argv.append(file.path)

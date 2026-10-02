@@ -41,6 +41,27 @@ enum Snapshot {
             try write(PanelWindowView(model: model), to: "\(folder)/\(name).png")
         }
         try write(MenuBarSamples(), to: "\(folder)/menubar.png")
+        try settings(to: "\(folder)/settings.png")
+    }
+
+    /// The settings window, as it is: its switches, lists and text fields
+    /// are AppKit's, which ImageRenderer can't draw, so this one is put on
+    /// screen and captured.
+    @MainActor
+    private static func settings(to path: String) throws {
+        let controller = SettingsWindowController(machine: { Machine.local() })
+        controller.show()
+        // Long enough for the release check to answer.
+        RunLoop.current.run(until: Date().addingTimeInterval(4))
+        guard let view = controller.window?.contentView, let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        view.cacheDisplay(in: view.bounds, to: bitmap)
+        guard let png = bitmap.representation(using: .png, properties: [:]) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        try png.write(to: URL(fileURLWithPath: path))
+        print("wrote \(path) (\(bitmap.pixelsWide)×\(bitmap.pixelsHigh))")
     }
 
     @MainActor

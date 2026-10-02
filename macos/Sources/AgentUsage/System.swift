@@ -1,0 +1,160 @@
+import AgentUsageCore
+import AppKit
+import ServiceManagement
+
+/// What build-app.sh wrote into Info.plist.
+enum AppInfo {
+    /// `0.6.0` on a release, `0.6.0-dev+3f2a1c` otherwise.
+    static var version: String {
+        Bundle.main.object(forInfoDictionaryKey: "AgentUsageVersion") as? String
+            ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+    }
+
+    /// `owner/name` of the GitHub repository releases come from.
+    static var repository: String? {
+        (Bundle.main.object(forInfoDictionaryKey: "AgentUsageRepository") as? String).flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    /// The `agent-usage` command inside the app, which installs updates.
+    static var command: String? {
+        let path = Bundle.main.resourceURL?.appendingPathComponent("bin/agent-usage").path
+        return path.flatMap { Programs.isProgram($0) ? $0 : nil }
+    }
+
+    static var inApplicationsFolder: Bool {
+        let path = Bundle.main.bundleURL.path
+        return path.hasPrefix("/Applications/") || path.hasPrefix(NSHomeDirectory() + "/Applications/")
+    }
+}
+
+/// Starting at login, through macOS's own login items (macOS 13 and up).
+enum LoginItem {
+    enum State {
+        case on, off, needsApproval
+    }
+
+    static var state: State {
+        switch SMAppService.mainApp.status {
+        case .enabled: return .on
+        case .requiresApproval: return .needsApproval
+        default: return .off
+        }
+    }
+
+    static func set(_ on: Bool) throws {
+        if on {
+            try SMAppService.mainApp.register()
+        } else {
+            try SMAppService.mainApp.unregister()
+        }
+    }
+
+    /// On the first start from an Applications folder, turn it on. A copy
+    /// opened from Downloads or a build folder is left alone.
+    static func enableOnFirstStart() {
+        let defaults = UserDefaults.standard
+        guard AppInfo.inApplicationsFolder, !defaults.bool(forKey: Settings.loginItemConfigured) else {
+            return
+        }
+        defaults.set(true, forKey: Settings.loginItemConfigured)
+        do {
+            try set(true)
+            Log.write("start at login: on")
+        } catch {
+            Log.write("start at login: \(error.localizedDescription)")
+        }
+    }
+}
+
+/// Asks GitHub for the newest release.
+enum ReleaseChecker {
+    static func latest(_ done: @escaping (Result<String, ReleaseCheckError>) -> Void) {
+        guard let repository = AppInfo.repository, let url = Releases.latestURL(repository: repository) else {
+            done(.failure(ReleaseCheckError("this build doesn't know where its releases are")))
+            return
+        }
+        var request = URLRequest(url: url, timeoutInterval: 20)
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        request.setValue("agent-usage/\(AppInfo.version)", forHTTPHeaderField: "User-Agent")
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            let result: Result<String, ReleaseCheckError>
+            if let error {
+                result = .failure(ReleaseCheckError(error.localizedDescription))
+            } else if let status = (response as? HTTPURLResponse)?.statusCode, status == 404 {
+                result = .failure(ReleaseCheckError("no releases yet"))
+            } else if let data, let version = Releases.latestVersion(fromAPI: data) {
+                result = .success(version)
+            } else {
+                let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                result = .failure(ReleaseCheckError("GitHub answered with status \(status)"))
+            }
+            DispatchQueue.main.async { done(result) }
+        }.resume()
+    }
+}
+
+/// The settings' keys and defaults, the GNOME schema's.
+enum Settings {
+    static let limitsInterval = "limitsInterval"
+    static let scanInterval = "scanInterval"
+    static let agent = "agent"
+    static let agentCommand = "agentCommand"
+    static let terminal = "terminal"
+    static let terminalCommand = "terminalCommand"
+    static let checkUpdates = "checkUpdates"
+    static let loginItemConfigured = "loginItemConfigured"
+
+    static func registerDefaults() {
+        UserDefaults.standard.register(defaults: [
+            limitsInterval: 300, scanInterval: 15, agent: "opencode", agentCommand: "",
+            terminal: "auto", terminalCommand: "", checkUpdates: true,
+        ])
+    }
+
+    static var launchPrefs: LaunchPrefs {
+        let defaults = UserDefaults.standard
+        return LaunchPrefs(
+            agent: defaults.string(forKey: agent) ?? "opencode",
+            agentCommand: defaults.string(forKey: agentCommand) ?? "",
+            terminal: defaults.string(forKey: terminal) ?? "auto",
+            terminalCommand: defaults.string(forKey: terminalCommand) ?? ""
+        )
+    }
+}
+
+/// An app without a Dock icon shows no menu bar of its own, but its key
+/// equivalents still work: copy and paste in the settings' text fields,
+/// Cmd-W to close the window, Cmd-Q to quit.
+enum MainMenu {
+    static func install() {
+        let main = NSMenu()
+
+        let appMenu = NSMenu()
+        appMenu.addItem(withTitle: "Quit Agent Usage", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        main.addItem(submenu: appMenu, title: "Agent Usage")
+
+        let edit = NSMenu(title: "Edit")
+        edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        edit.addItem(.separator())
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        main.addItem(submenu: edit, title: "Edit")
+
+        let window = NSMenu(title: "Window")
+        window.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        main.addItem(submenu: window, title: "Window")
+
+        NSApp.mainMenu = main
+    }
+}
+
+private extension NSMenu {
+    func addItem(submenu: NSMenu, title: String) {
+        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        item.submenu = submenu
+        addItem(item)
+    }
+}

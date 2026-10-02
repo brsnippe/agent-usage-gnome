@@ -20,6 +20,10 @@
 	<string>@VERSION@</string>
 	<key>CFBundleVersion</key>
 	<string>@VERSION@</string>
+	<key>AgentUsageVersion</key>
+	<string>@VERSION_LABEL@</string>
+	<key>AgentUsageRepository</key>
+	<string>@REPOSITORY@</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
 	<key>LSUIElement</key>
