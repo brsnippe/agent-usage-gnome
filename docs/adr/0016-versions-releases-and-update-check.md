@@ -62,3 +62,6 @@ clean `main` with a `## X.Y.Z` changelog section. It then:
 - **Updates still need a reload** of GNOME Shell
   ([0014](0014-reloading-gnome-shell.md)). The Update button says so.
 - **Only `vX.Y.Z` tags count as releases.** Other tags are ignored.
+- **The macOS app checks GitHub's releases API instead,** now that the
+  repository is public, and CI attaches the app to each release
+  ([0021](0021-install-on-macos-from-the-release-zip.md)).
