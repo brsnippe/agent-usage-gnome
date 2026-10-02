@@ -64,6 +64,25 @@ jobs:
         timeout-minutes: 3
         run: '"macos/build/Agent Usage.app/Contents/MacOS/AgentUsage" --snapshot macos/snapshots'
 
+      # The real app on a Mac with no agents signed in: it has to find Python
+      # and its bundled collectors, and their records have to land.
+      - name: The app starts and collects
+        timeout-minutes: 3
+        run: |
+          usage=~/.local/state/omarchy/agents/usage
+          "macos/build/Agent Usage.app/Contents/MacOS/AgentUsage" &
+          pid=$!
+          for _ in $(seq 90); do
+            [[ -f $usage/claude.json && -f $usage/codex.json ]] && break
+            sleep 1
+          done
+          kill -0 $pid
+          kill $pid
+          cat ~/Library/Logs/AgentUsage/agent-usage.log
+          for agent in claude codex; do
+            /usr/bin/python3 -c 'import json, sys; r = json.load(open(sys.argv[1])); print(r["id"], "|", r["usageStatusText"])' "$usage/$agent.json"
+          done
+
       - name: Keep the snapshots
         uses: actions/upload-artifact@v4
         with:
