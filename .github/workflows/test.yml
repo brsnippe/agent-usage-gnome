@@ -36,9 +36,36 @@ jobs:
       - name: Claude limits back-off
         run: python3 test/claude-limits-test.py
 
+      - name: Claude sign-in from the macOS Keychain
+        run: python3 test/claude-keychain-test.py
+
       - name: Install, update and uninstall from git
         run: test/cli-test.sh
 
       - name: Tag matches VERSION
         if: startsWith(github.ref, 'refs/tags/v')
         run: test "v$(cat VERSION)" = "$GITHUB_REF_NAME"
+
+  # The collectors on macOS, with the Python a Mac has out of the box: the one
+  # from Apple's Command Line Tools (3.9).
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: macOS's own Python
+        run: /usr/bin/python3 --version
+
+      - name: Claude limits back-off
+        run: /usr/bin/python3 test/claude-limits-test.py
+
+      - name: Claude sign-in from the macOS Keychain
+        run: /usr/bin/python3 test/claude-keychain-test.py
+
+      - name: Collectors run without any agent data
+        run: |
+          export HOME=$(mktemp -d)
+          for agent in claude codex; do
+            /usr/bin/python3 "agent-usage@local/bin/agent-usage-$agent" --force |
+              /usr/bin/python3 -c 'import json, sys; r = json.load(sys.stdin); print(r["id"], "|", r["usageStatusText"], "|", r["authHelpText"])'
+          done

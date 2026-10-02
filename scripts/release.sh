@@ -26,6 +26,7 @@ grep -q "^## $version\$" CHANGELOG.md || die "add a '## $version' section to CHA
 echo "Running the tests …"
 for test in test/*-test.js; do gjs -m "$test" >/dev/null || die "$test failed."; done
 python3 test/claude-limits-test.py >/dev/null || die "test/claude-limits-test.py failed."
+python3 test/claude-keychain-test.py >/dev/null || die "test/claude-keychain-test.py failed."
 test/cli-test.sh >/dev/null || die "test/cli-test.sh failed."
 
 echo "$version" >VERSION

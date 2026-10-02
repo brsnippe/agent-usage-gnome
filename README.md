@@ -231,10 +231,15 @@ Both are in `patches/`:
 | `agent-usage-claude` | [#13894](https://github.com/omacom/omarchy/pull/13894): Count Claude usage from opencode v2 sessions | `db4daae` |
 | `agent-usage-codex` | [#7686](https://github.com/omacom/omarchy/pull/7686): Include OpenCode v2 sessions, and only count the last 30 days of OpenCode usage | `48a7927` |
 
-The Claude collector has one more change of its own on top of that, which
-isn't from upstream: `patches/claude-limits-backoff.diff`. It adds the
-rate-limit back-off and the stale marking described under
-[Refreshing](#refreshing).
+The Claude collector has two more changes of its own on top of that, which
+aren't from upstream:
+
+- `patches/claude-limits-backoff.diff` adds the rate-limit back-off and the
+  stale marking described under [Refreshing](#refreshing).
+- `patches/claude-macos-keychain.diff` is for the coming macOS app. On a Mac,
+  Claude Code keeps its login in the Keychain rather than in
+  `~/.claude/.credentials.json`, so this reads it from there. On Linux it
+  changes nothing.
 
 When those PRs are merged:
 
@@ -245,11 +250,12 @@ When those PRs are merged:
   chmod +x agent-usage-codex
   ```
 - **Claude:** take the official collector **and reapply**
-  `claude-limits-backoff.diff`. Without it, the back-off and stale marking
-  are gone:
+  `claude-limits-backoff.diff`, then `claude-macos-keychain.diff`. Without
+  them, the back-off, the stale marking and the Mac sign-in are gone:
   ```bash
   curl -fsSL https://raw.githubusercontent.com/omacom/omarchy/master/bin/omarchy-agent-usage-claude -o agent-usage-claude
   patch agent-usage-claude < /path/to/agent-usage/patches/claude-limits-backoff.diff
+  patch agent-usage-claude < /path/to/agent-usage/patches/claude-macos-keychain.diff
   chmod +x agent-usage-claude
   ```
 
@@ -277,6 +283,7 @@ Tests, all without GNOME:
 ```bash
 for t in test/*-test.js; do gjs -m "$t"; done   # panel logic
 python3 test/claude-limits-test.py              # Claude limits back-off
+python3 test/claude-keychain-test.py            # Claude sign-in from the macOS Keychain
 test/cli-test.sh                                # install, update, uninstall from git
 ```
 
