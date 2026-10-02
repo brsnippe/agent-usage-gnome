@@ -34,6 +34,18 @@ final class ReleasesTests: XCTestCase {
         XCTAssertNil(answer("<html>rate limited</html>"))
     }
 
+    func testLatestVersionFromTheReleasePage() {
+        func page(_ address: String) -> String? {
+            Releases.latestVersion(fromPage: URL(string: address)!)
+        }
+        XCTAssertEqual(Releases.pageURL(repository: "brsnippe/agent-usage-gnome")?.absoluteString,
+                       "https://github.com/brsnippe/agent-usage-gnome/releases/latest")
+        XCTAssertEqual(page("https://github.com/brsnippe/agent-usage-gnome/releases/tag/v0.7.0"), "0.7.0")
+        XCTAssertNil(page("https://github.com/brsnippe/agent-usage-gnome/releases"), "no release: GitHub stays on the list")
+        XCTAssertNil(page("https://github.com/brsnippe/agent-usage-gnome/releases/latest"), "no redirect at all")
+        XCTAssertNil(page("https://github.com/brsnippe/agent-usage-gnome/releases/tag/nightly"))
+    }
+
     func testStatusLine() {
         XCTAssertEqual(Releases.status(installed: "0.6.0", latest: .success("0.7.0")).text, "v0.6.0 · v0.7.0 is available")
         XCTAssertTrue(Releases.status(installed: "0.6.0", latest: .success("0.7.0")).updateAvailable)

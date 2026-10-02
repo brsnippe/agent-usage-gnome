@@ -114,16 +114,22 @@ struct SettingsView: View {
 
         Form {
             Section {
-                Stepper(value: $limits, in: 30...3600, step: 30) {
-                    LabeledContent("Check limits every", value: "\(limits) seconds")
+                LabeledContent("Check limits every") {
+                    HStack {
+                        Text("\(limits) seconds").foregroundColor(.secondary)
+                        Stepper("Check limits every", value: $limits, in: 30...3600, step: 30).labelsHidden()
+                    }
                 }
-                Stepper(value: $scan, in: 5...60) {
-                    LabeledContent("Rescan local usage every", value: "\(scan) minutes")
+                LabeledContent("Rescan local usage every") {
+                    HStack {
+                        Text("\(scan) minutes").foregroundColor(.secondary)
+                        Stepper("Rescan local usage every", value: $scan, in: 5...60).labelsHidden()
+                    }
                 }
             } header: {
                 Text("Refresh")
             } footer: {
-                Text("Changes apply right away. Limit checks keep the percentage in the menu bar current, and opening the panel always checks right away. Anthropic refuses checks that come too often; checking then pauses for 1 to 15 minutes. Rescans reread transcripts and OpenCode history for the token charts. The panel also refreshes after you unlock the screen and when the Mac wakes from sleep.")
+                note("Changes apply right away. Opening the panel always checks limits too, and so do unlocking and waking the Mac. Anthropic refuses checks that come too often; checking then pauses for 1 to 15 minutes. Rescans reread transcripts and OpenCode history for the token charts.")
             }
 
             Section {
@@ -155,7 +161,7 @@ struct SettingsView: View {
             } header: {
                 Text("Open agent")
             } footer: {
-                Text("What the terminal button in the panel, and right-clicking the menu bar icon, opens. In a custom terminal command, {command} is where the agent goes; without it, the agent goes at the end.")
+                note("What the panel's terminal button, and right-clicking the menu bar icon, opens. In a custom terminal command, {command} is where the agent goes; without it, the agent goes at the end.")
             }
 
             Section {
@@ -167,6 +173,9 @@ struct SettingsView: View {
                 }
                 if let error = model.loginError {
                     Text(error).foregroundColor(.red)
+                }
+                LabeledContent("Agent Usage keeps running in the menu bar") {
+                    Button("Quit") { NSApp.terminate(nil) }
                 }
             } header: {
                 Text("Startup")
@@ -187,17 +196,18 @@ struct SettingsView: View {
             } header: {
                 Text("Updates")
             } footer: {
-                Text("Asks GitHub for the newest release. The panel says when one is out.")
-            }
-
-            Section {
-                HStack {
-                    Spacer()
-                    Button("Quit Agent Usage") { NSApp.terminate(nil) }
-                }
+                note("Asks GitHub for the newest release. The panel says when one is out.")
             }
         }
         .formStyle(.grouped)
-        .frame(width: 580, height: 720)
+        .frame(width: 580, height: 760)
+    }
+
+    private func note(_ text: String) -> some View {
+        Text(text)
+            .font(.callout)
+            .foregroundColor(.secondary)
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

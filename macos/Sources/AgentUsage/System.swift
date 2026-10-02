@@ -66,29 +66,42 @@ enum LoginItem {
     }
 }
 
-/// Asks GitHub for the newest release.
+/// Asks GitHub for the newest release: its API, or the release page when the
+/// API's hourly limit for this network has run out.
 enum ReleaseChecker {
     static func latest(_ done: @escaping (Result<String, ReleaseCheckError>) -> Void) {
-        guard let repository = AppInfo.repository, let url = Releases.latestURL(repository: repository) else {
-            done(.failure(ReleaseCheckError("this build doesn't know where its releases are")))
+        let finish = { (result: Result<String, ReleaseCheckError>) in DispatchQueue.main.async { done(result) } }
+        guard let repository = AppInfo.repository, let api = Releases.latestURL(repository: repository),
+              let page = Releases.pageURL(repository: repository) else {
+            finish(.failure(ReleaseCheckError("this build doesn't know where its releases are")))
             return
         }
-        var request = URLRequest(url: url, timeoutInterval: 20)
+        var request = URLRequest(url: api, timeoutInterval: 20)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("agent-usage/\(AppInfo.version)", forHTTPHeaderField: "User-Agent")
         URLSession.shared.dataTask(with: request) { data, response, error in
-            let result: Result<String, ReleaseCheckError>
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
             if let error {
-                result = .failure(ReleaseCheckError(error.localizedDescription))
-            } else if let status = (response as? HTTPURLResponse)?.statusCode, status == 404 {
-                result = .failure(ReleaseCheckError("no releases yet"))
-            } else if let data, let version = Releases.latestVersion(fromAPI: data) {
-                result = .success(version)
+                finish(.failure(ReleaseCheckError(error.localizedDescription)))
+            } else if status == 404 {
+                finish(.failure(ReleaseCheckError("no releases yet")))
+            } else if status == 200, let data, let version = Releases.latestVersion(fromAPI: data) {
+                finish(.success(version))
             } else {
-                let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-                result = .failure(ReleaseCheckError("GitHub answered with status \(status)"))
+                fromPage(page, apiStatus: status, finish)
             }
-            DispatchQueue.main.async { done(result) }
+        }.resume()
+    }
+
+    private static func fromPage(_ page: URL, apiStatus: Int, _ finish: @escaping (Result<String, ReleaseCheckError>) -> Void) {
+        var request = URLRequest(url: page, timeoutInterval: 20)
+        request.httpMethod = "HEAD"
+        URLSession.shared.dataTask(with: request) { _, response, error in
+            if let final = response?.url, let version = Releases.latestVersion(fromPage: final) {
+                finish(.success(version))
+            } else {
+                finish(.failure(ReleaseCheckError(error?.localizedDescription ?? "GitHub answered with status \(apiStatus)")))
+            }
         }.resume()
     }
 }
