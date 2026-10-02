@@ -1,0 +1,9 @@
+{
+  "uuid": "agent-usage@local",
+  "name": "Agent Usage",
+  "description": "Claude Code and Codex rate limits and token usage in the top bar, including OpenCode v2 sessions. A port of Omarchy's Agents widget.",
+  "shell-version": ["46", "47", "48", "49", "50"],
+  "url": "https://github.com/omacom/omarchy",
+  "settings-schema": "org.gnome.shell.extensions.agent-usage",
+  "version": 6
+}

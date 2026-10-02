@@ -1,0 +1,164 @@
+Not from upstream: back off after Anthropic answers 429, and mark cached limits
+as stale (limitsStale, limitsFetchedAt, limitsNote) instead of showing them
+as current. Applies on top of pr-13894-claude-opencode-v2.diff.
+
+--- a/bin/omarchy-agent-usage-claude
++++ b/bin/omarchy-agent-usage-claude
+@@ -35,6 +35,10 @@
+ AUTH_HELP = "Run `claude auth login` to restore authoritative usage."
+ USAGE_ENDPOINT = "https://api.anthropic.com/api/oauth/usage"
+ PROBE_MIN_INTERVAL_SECONDS = 15
++# After a 429, stop probing for a while: Anthropic often answers with
++# `retry-after: 0`, so the wait doubles on each refusal within these bounds.
++BACKOFF_MIN_SECONDS = 60
++BACKOFF_MAX_SECONDS = 900
+ 
+ 
+ def config_dir() -> Path:
+@@ -728,6 +732,24 @@
+   return out
+ 
+ 
++# Seconds to wait from a Retry-After header: a number of seconds or an HTTP
++# date. Anything unreadable counts as no advice.
++def parse_retry_after(value: Any) -> float:
++  raw = str(value or "").strip()
++  if raw == "":
++    return 0.0
++  try:
++    return max(0.0, float(raw))
++  except ValueError:
++    pass
++  try:
++    from email.utils import parsedate_to_datetime
++
++    return max(0.0, parsedate_to_datetime(raw).timestamp() - time.time())
++  except Exception:
++    return 0.0
++
++
+ def probe_limits(access_token: str) -> dict[str, Any]:
+   request = urllib.request.Request(
+     USAGE_ENDPOINT,
+@@ -746,8 +768,8 @@
+       help_text = "Anthropic's usage endpoint is rate limiting checks right now" + (
+         f" (retry after {retry_after}s)" if retry_after else ""
+       ) + ". Local Claude Code stats are still shown."
+-    else:
+-      help_text = f"Anthropic's usage endpoint returned status {error.code}. Local Claude Code stats are still shown."
++      return {"ok": False, "helpText": help_text, "rateLimited": True, "retryAfter": parse_retry_after(retry_after)}
++    help_text = f"Anthropic's usage endpoint returned status {error.code}. Local Claude Code stats are still shown."
+     return {"ok": False, "helpText": help_text}
+   except Exception:
+     # A transport failure reached no server at all — no route, no DNS. Any
+@@ -811,6 +833,29 @@
+   return [entry for entry in entries if isinstance(entry, dict) and limit_window_open(entry, now)]
+ 
+ 
++def iso_from_ms(ms: int) -> str:
++  return dt.datetime.fromtimestamp(ms / 1000, dt.timezone.utc).isoformat()
++
++
++def rate_limited_note(until_seconds: float) -> str:
++  return "Anthropic is rate limiting checks · next try " + dt.datetime.fromtimestamp(until_seconds).strftime("%H:%M")
++
++
++# Cached limits shown in place of a fresh probe say so: when they were
++# measured, and why nothing newer is available. Without this the record's
++# updatedAt keeps moving while the percentages quietly stop.
++def use_cached(result: dict[str, Any], fallback: list[dict[str, Any]], cached: dict[str, Any], note: str) -> None:
++  result["limits"] = fallback
++  if not fallback:
++    return
++  result["limitsStale"] = True
++  fetched_ms = number(cached.get("fetchedAtMs"))
++  if fetched_ms > 0:
++    result["limitsFetchedAt"] = iso_from_ms(fetched_ms)
++  if note:
++    result["limitsNote"] = note
++
++
+ def collect_limits(access_token: str, expires_at_ms: int, force: bool) -> dict[str, Any]:
+   result = {"limits": [], "usageStatusText": "", "authHelpText": AUTH_HELP}
+ 
+@@ -827,11 +872,11 @@
+   # nothing else set hides the whole section and explains nothing — and keep
+   # showing the last numbers whose window has not since reset.
+   if access_token == "":
+-    result["limits"] = fallback
++    use_cached(result, fallback, cached, "Waiting for Claude Code to sign in")
+     result["usageStatusText"] = "Waiting for auth"
+     return result
+   if expires_at_ms > 0 and expires_at_ms <= time.time() * 1000:
+-    result["limits"] = fallback
++    use_cached(result, fallback, cached, "Claude Code's saved sign-in expired")
+     result["usageStatusText"] = "Sign-in expired"
+     result["authHelpText"] = (
+       "Claude Code's saved sign-in expired"
+@@ -840,29 +885,49 @@
+     )
+     return result
+ 
++  # A refusal holds even against --force: probing again only extends it.
++  backoff_until = number(cached.get("backoffUntilMs")) / 1000
++  if time.time() < backoff_until:
++    note = rate_limited_note(backoff_until)
++    use_cached(result, fallback, cached, note)
++    if not fallback:
++      result["usageStatusText"] = "Claude limits unavailable"
++      result["authHelpText"] = note
++    return result
++
+   # --force is a person asking for fresh numbers, so it skips the reuse window
+   # entirely; the interval is there to absorb repeated panel opens, not to
+   # overrule someone who pressed refresh.
+-  fetched_at = number(cached.get("fetchedAtMs")) / 1000
+-  if fallback and not force and time.time() - fetched_at < PROBE_MIN_INTERVAL_SECONDS:
++  fetched_ms = number(cached.get("fetchedAtMs"))
++  if fallback and not force and time.time() - fetched_ms / 1000 < PROBE_MIN_INTERVAL_SECONDS:
+     result["limits"] = fallback
++    result["limitsFetchedAt"] = iso_from_ms(fetched_ms)
+     return result
+ 
+   probe = probe_limits(access_token)
+   if probe["ok"]:
++    now_ms = round(time.time() * 1000)
+     result["limits"] = probe["limits"]
+-    write_json(probe_cache, {"fetchedAtMs": round(time.time() * 1000), "limits": probe["limits"]})
++    result["limitsFetchedAt"] = iso_from_ms(now_ms)
++    # A clean answer ends any backoff: the cache keeps only the new reading.
++    write_json(probe_cache, {"fetchedAtMs": now_ms, "limits": probe["limits"]})
+     return result
+ 
++  note = probe["helpText"]
++  if probe.get("rateLimited"):
++    wait = min(BACKOFF_MAX_SECONDS, max(BACKOFF_MIN_SECONDS, number(cached.get("backoffSeconds")) * 2, probe.get("retryAfter") or 0))
++    until = time.time() + wait
++    write_json(probe_cache, dict(cached, backoffSeconds=round(wait), backoffUntilMs=round(until * 1000)))
++    note = rate_limited_note(until)
++
+   # The first probe after login often fires before DHCP has handed out a
+   # route. Ask the shell to try again sooner than its regular interval.
+   if probe.get("transport"):
+     result["retryAdvised"] = True
+-  if fallback:
+-    result["limits"] = fallback
+-  else:
++  use_cached(result, fallback, cached, note)
++  if not fallback:
+     result["usageStatusText"] = "Claude limits unavailable"
+-    result["authHelpText"] = probe["helpText"]
++    result["authHelpText"] = note
+   return result
+ 
+ 
+@@ -916,6 +981,9 @@
+   }
+   if limits.get("retryAdvised"):
+     record["retryAdvised"] = True
++  for key in ("limitsFetchedAt", "limitsStale", "limitsNote"):
++    if key in limits:
++      record[key] = limits[key]
+   record.update(stats)
+   print(json.dumps(record, separators=(",", ":"), sort_keys=True))
+   return 0

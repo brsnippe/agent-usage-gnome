@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.agent-usage" path="/org/gnome/shell/extensions/agent-usage/">
+    <key name="limits-interval" type="i">
+      <default>300</default>
+      <range min="30" max="3600"/>
+      <summary>Seconds between rate-limit checks</summary>
+      <description>How often to check the agents' rate limits in the background, which keeps the percentage in the top bar current. Opening the panel always checks right away. Anthropic refuses checks that come too often; the collector then pauses for 1 to 15 minutes.</description>
+    </key>
+    <key name="scan-interval" type="i">
+      <default>15</default>
+      <range min="5" max="60"/>
+      <summary>Minutes between full rescans of local usage</summary>
+      <description>How often to reread transcripts and OpenCode history for the token charts.</description>
+    </key>
+    <key name="check-updates" type="b">
+      <default>true</default>
+      <summary>Check daily for a new release</summary>
+      <description>Asks the git repository this was installed from for its newest release tag, once a day.</description>
+    </key>
+    <key name="agent" type="s">
+      <choices>
+        <choice value="opencode"/>
+        <choice value="claude"/>
+        <choice value="codex"/>
+        <choice value="custom"/>
+      </choices>
+      <default>"opencode"</default>
+      <summary>Agent the "Open" button starts</summary>
+    </key>
+    <key name="agent-command" type="s">
+      <default>""</default>
+      <summary>Command for a custom agent</summary>
+      <description>Used when agent is "custom", for example "claude --continue".</description>
+    </key>
+    <key name="terminal" type="s">
+      <choices>
+        <choice value="auto"/>
+        <choice value="ghostty"/>
+        <choice value="gnome-terminal"/>
+        <choice value="ptyxis"/>
+        <choice value="kitty"/>
+        <choice value="alacritty"/>
+        <choice value="wezterm"/>
+        <choice value="foot"/>
+        <choice value="konsole"/>
+        <choice value="xterm"/>
+        <choice value="custom"/>
+      </choices>
+      <default>"auto"</default>
+      <summary>Terminal to open the agent in</summary>
+      <description>"auto" uses the desktop's default terminal.</description>
+    </key>
+    <key name="terminal-command" type="s">
+      <default>""</default>
+      <summary>Command for a custom terminal</summary>
+      <description>Used when terminal is "custom". {command} is replaced by the agent's command; without it, the agent goes at the end. Example: "ghostty --window-decoration=false -e {command}".</description>
+    </key>
+  </schema>
+</schemalist>

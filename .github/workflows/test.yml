@@ -1,0 +1,44 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y gjs libglib2.0-bin jq
+
+      - name: Shell scripts parse
+        run: for f in *.sh bin/agent-usage scripts/*.sh test/*.sh agent-usage@local/bin/agent-usage-update; do bash -n "$f"; done
+
+      - name: Python compiles
+        run: |
+          for f in agent-usage@local/bin/agent-usage-claude agent-usage@local/bin/agent-usage-codex; do
+            python3 -c 'import ast, sys; ast.parse(open(sys.argv[1]).read(), sys.argv[1])' "$f"
+          done
+
+      - name: JavaScript parses
+        run: for f in agent-usage@local/*.js; do cp "$f" /tmp/check.mjs; node --check /tmp/check.mjs; done
+
+      - name: Settings schema compiles
+        run: glib-compile-schemas --strict --dry-run agent-usage@local/schemas
+
+      - name: Panel logic
+        run: for t in test/*-test.js; do gjs -m "$t"; done
+
+      - name: Claude limits back-off
+        run: python3 test/claude-limits-test.py
+
+      - name: Install, update and uninstall from git
+        run: test/cli-test.sh
+
+      - name: Tag matches VERSION
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: test "v$(cat VERSION)" = "$GITHUB_REF_NAME"

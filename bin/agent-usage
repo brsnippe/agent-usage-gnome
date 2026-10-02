@@ -1,0 +1,162 @@
+#!/bin/bash
+# Agent Usage for GNOME: install, update and inspect an install from git.
+#
+#   agent-usage update [--main] [--reinstall] [--pause]
+#   agent-usage version
+#   agent-usage latest
+#   agent-usage diagnose
+#   agent-usage uninstall [--purge]
+#
+# Everything is wrapped in main(), which bash reads in full before running it:
+# `update` checks out a new version of this very file while it runs.
+
+main() {
+  set -euo pipefail
+
+  local self clone
+  self=$(readlink -f "${BASH_SOURCE[0]}")
+  clone=$(dirname "$(dirname "$self")")
+  UUID="agent-usage@local"
+  EXT_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/gnome-shell/extensions/$UUID"
+  MANAGED_CLONE="${XDG_DATA_HOME:-$HOME/.local/share}/agent-usage-gnome"
+
+  local command="${1:-help}"
+  [[ $# -gt 0 ]] && shift
+  case "$command" in
+  update) update "$clone" "$@" ;;
+  version | --version | -v) version "$clone" ;;
+  latest) latest "$clone" ;;
+  diagnose) exec "$clone/diagnose.sh" ;;
+  uninstall) uninstall "$clone" "$@" ;;
+  help | --help | -h) usage ;;
+  *)
+    usage >&2
+    exit 2
+    ;;
+  esac
+}
+
+usage() {
+  cat <<'EOF'
+Usage: agent-usage <command>
+
+  update       Install the newest release (then: Alt+F2 → r on X11, or log out and in)
+                 --main       the latest commit on main instead of the newest release
+                 --reinstall  reinstall even when already up to date
+                 --pause      wait for Enter at the end (used by the Update button)
+  version      Show the installed version and the newest release
+  latest       Print the newest release's version number
+  diagnose     Print what's needed to debug the extension
+  uninstall    Remove the extension and this copy (--purge: also usage data and settings)
+EOF
+}
+
+die() {
+  echo "agent-usage: $*" >&2
+  exit 1
+}
+
+require_git_clone() {
+  git -C "$1" rev-parse --git-dir >/dev/null 2>&1 ||
+    die "$1 isn't a git checkout, so it can't update itself. Install with get.sh instead (see the README)."
+}
+
+# Talk to GitHub without ever stopping to ask for a password or a host key:
+# this also runs in the background from the panel.
+quiet_git() {
+  GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -o BatchMode=yes}" git "$@"
+}
+
+newest_tag() {
+  # Release tags only (vX.Y.Z), highest version first.
+  grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1
+}
+
+installed_version() {
+  jq -r '.["version-name"] // empty' "$EXT_DIR/metadata.json" 2>/dev/null || true
+}
+
+latest() {
+  local clone="$1" tag
+  require_git_clone "$clone"
+  tag=$(quiet_git -C "$clone" ls-remote --tags --refs origin 2>/dev/null | sed 's|.*refs/tags/||' | newest_tag) ||
+    true
+  [[ -n $tag ]] || die "couldn't read releases from $(git -C "$clone" remote get-url origin 2>/dev/null || echo origin)"
+  echo "${tag#v}"
+}
+
+version() {
+  local clone="$1" installed newest
+  installed=$(installed_version)
+  echo "installed: ${installed:-not installed}"
+  if newest=$(latest "$clone" 2>/dev/null); then
+    if [[ -n $installed && $(printf '%s\n%s\n' "$newest" "${installed%%[-+]*}" | sort -V | tail -1) == "${installed%%[-+]*}" ]]; then
+      echo "newest:    $newest (up to date)"
+    else
+      echo "newest:    $newest (run: agent-usage update)"
+    fi
+  else
+    echo "newest:    unknown (couldn't reach $(git -C "$clone" remote get-url origin 2>/dev/null || echo the repository))"
+  fi
+}
+
+update() {
+  local clone="$1" main_branch=false reinstall=false pause=false
+  shift
+  for arg in "$@"; do
+    case "$arg" in
+    --main) main_branch=true ;;
+    --reinstall) reinstall=true ;;
+    --pause) pause=true ;;
+    *) die "unknown option for update: $arg" ;;
+    esac
+  done
+  if $pause; then
+    trap 'echo; read -rp "Press Enter to close. " _' EXIT
+  fi
+
+  require_git_clone "$clone"
+  cd "$clone"
+  if [[ -n $(git status --porcelain --untracked-files=no) ]]; then
+    die "$clone has local changes; commit or discard them first."
+  fi
+
+  echo "Checking $(git remote get-url origin) …"
+  quiet_git fetch --quiet --tags --force --prune origin || die "couldn't fetch from $(git remote get-url origin)."
+
+  local target label
+  if $main_branch; then
+    target="origin/main"
+    label="main ($(git rev-parse --short origin/main))"
+  else
+    target=$(git tag -l | newest_tag)
+    [[ -n $target ]] || die "no releases found."
+    label="$target"
+  fi
+
+  local installed
+  installed=$(installed_version)
+  if ! $reinstall && [[ -n $installed && $(git rev-parse HEAD) == $(git rev-parse "$target^{commit}") ]]; then
+    echo "Already up to date: $installed."
+    return 0
+  fi
+
+  echo "Installing $label (installed: ${installed:-none}) …"
+  git -c advice.detachedHead=false checkout --quiet --detach "$target"
+  "$clone/install.sh"
+}
+
+uninstall() {
+  local clone="$1"
+  shift
+  "$clone/uninstall.sh" "$@"
+  # Only the copy get.sh made is ours to delete; a checkout elsewhere is
+  # someone's working copy.
+  if [[ $clone -ef $MANAGED_CLONE ]]; then
+    rm -rf "$MANAGED_CLONE"
+    echo "Removed $MANAGED_CLONE."
+  fi
+}
+
+main "$@"
+exit

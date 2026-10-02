@@ -1,0 +1,233 @@
+/* Omarchy's Agents panel in its Kanagawa theme.
+ *   background #1f1f28   text and border #dcd7ba   dim #8e8b78   urgent #c34043
+ * The bars are drawn in extension.js and use the same colors. */
+
+/* ---- top bar */
+
+.agent-usage-panel-label {
+  padding-left: 4px;
+}
+
+.agent-usage-alarm {
+  color: #c34043;
+}
+
+/* ---- popup */
+
+.agent-usage-menu .popup-menu-content {
+  background-color: #1f1f28;
+  color: #dcd7ba;
+  border: 1px solid #dcd7ba;
+  border-radius: 0;
+  padding: 0;
+  margin: 0;
+  box-shadow: none;
+}
+
+.agent-usage-panel {
+  width: 380px;
+  padding: 16px;
+  spacing: 12px;
+  font-family: "JetBrains Mono", "JetBrainsMono Nerd Font", monospace;
+  font-size: 10pt;
+  color: #dcd7ba;
+}
+
+.agent-usage-separator {
+  height: 1px;
+  background-color: rgba(220, 215, 186, 0.15);
+}
+
+/* ---- hero: mark, name, plan, actions */
+
+.agent-usage-hero {
+  spacing: 12px;
+}
+
+.agent-usage-logo {
+  icon-size: 28px;
+}
+
+.agent-usage-title {
+  font-size: 12pt;
+}
+
+.agent-usage-meta {
+  font-size: 8pt;
+  font-weight: bold;
+  letter-spacing: 1.5px;
+  color: #8e8b78;
+  padding-top: 2px;
+}
+
+.agent-usage-action {
+  padding: 6px;
+  color: #8e8b78;
+  border-radius: 0;
+}
+
+.agent-usage-action:hover,
+.agent-usage-action:focus {
+  color: #dcd7ba;
+  background-color: rgba(220, 215, 186, 0.08);
+}
+
+.agent-usage-action-icon {
+  icon-size: 16px;
+}
+
+/* ---- agent switch */
+
+.agent-usage-tabs {
+  spacing: 8px;
+}
+
+.agent-usage-tab {
+  padding: 5px 8px;
+  font-size: 9pt;
+  color: #8e8b78;
+  border: 1px solid rgba(220, 215, 186, 0.35);
+  border-radius: 0;
+}
+
+.agent-usage-tab:hover,
+.agent-usage-tab:focus {
+  color: #dcd7ba;
+  border-color: rgba(220, 215, 186, 0.7);
+}
+
+.agent-usage-tab:checked {
+  color: #dcd7ba;
+  background-color: rgba(220, 215, 186, 0.14);
+  border-color: #dcd7ba;
+}
+
+/* ---- problem card */
+
+.agent-usage-status {
+  padding: 10px 12px;
+  background-color: rgba(195, 64, 67, 0.10);
+  border: 1px solid rgba(195, 64, 67, 0.35);
+}
+
+.agent-usage-status-text {
+  font-size: 8.5pt;
+  color: #8e8b78;
+}
+
+/* ---- sections */
+
+.agent-usage-section {
+  spacing: 10px;
+}
+
+.agent-usage-section-title {
+  font-size: 8pt;
+  font-weight: bold;
+  letter-spacing: 1px;
+  color: #8e8b78;
+}
+
+/* Limits from an earlier check (rate limited, offline): Kanagawa's yellow.
+ * Kept after .agent-usage-section-title so it wins. */
+.agent-usage-stale {
+  color: #c0a36e;
+}
+
+.agent-usage-limit {
+  spacing: 6px;
+}
+
+.agent-usage-row-value {
+  font-size: 8.5pt;
+}
+
+.agent-usage-urgent {
+  color: #c34043;
+}
+
+.agent-usage-bar {
+  height: 5px;
+}
+
+.agent-usage-caption {
+  font-size: 8.5pt;
+  color: #8e8b78;
+}
+
+/* ---- tokens by day */
+
+.agent-usage-day {
+  padding: 2px 0;
+}
+
+.agent-usage-day-label {
+  min-width: 52px;
+  font-size: 8.5pt;
+  color: #8e8b78;
+}
+
+.agent-usage-day-bar {
+  margin: 0 10px 0 8px;
+}
+
+.agent-usage-day-value {
+  min-width: 52px;
+  text-align: right;
+  font-size: 8.5pt;
+  font-weight: bold;
+  color: #8e8b78;
+}
+
+.agent-usage-today .agent-usage-day-label,
+.agent-usage-today .agent-usage-day-value,
+.agent-usage-day:hover .agent-usage-day-label,
+.agent-usage-day:hover .agent-usage-day-value {
+  color: #dcd7ba;
+}
+
+.agent-usage-today .agent-usage-day-label {
+  font-weight: bold;
+}
+
+/* ---- tokens by model */
+
+.agent-usage-model-content {
+  padding: 6px 8px;
+}
+
+.agent-usage-model-name {
+  font-size: 9pt;
+}
+
+.agent-usage-model-value {
+  font-size: 9pt;
+  font-weight: bold;
+  color: #8e8b78;
+}
+
+.agent-usage-model:hover .agent-usage-model-value {
+  color: #dcd7ba;
+}
+
+/* ---- footer and empty state */
+
+.agent-usage-footer {
+  font-size: 8.5pt;
+  color: #8e8b78;
+  text-align: center;
+}
+
+.agent-usage-footer-update {
+  color: #c0a36e;
+}
+
+.agent-usage-footer-update:hover {
+  color: #dcd7ba;
+}
+
+.agent-usage-empty {
+  padding: 24px 0;
+  color: #8e8b78;
+  text-align: center;
+}
