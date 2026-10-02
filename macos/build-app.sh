@@ -15,7 +15,10 @@ version=$(cat ../VERSION)
 # VERSION-dev+<commit> anywhere else, so a test build never looks newer than
 # the release it leads up to.
 label="$version"
-if [[ $(git describe --tags --exact-match 2>/dev/null) != "v$version" || -n $(git status --porcelain --untracked-files=no) ]]; then
+tag=$(git describe --tags --exact-match 2>/dev/null || true)
+# A CI checkout of a tag may come without the tag object itself.
+[[ ${GITHUB_REF_TYPE:-} == tag ]] && tag=$GITHUB_REF_NAME
+if [[ $tag != "v$version" || -n $(git status --porcelain --untracked-files=no) ]]; then
   label="$version-dev+$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 fi
 # Where the update check looks for releases: this checkout's GitHub repository.
@@ -34,7 +37,7 @@ cp "$bin/AgentUsage" "$app/Contents/MacOS/AgentUsage"
 sed -e "s/@VERSION@/$version/g" -e "s/@VERSION_LABEL@/$label/g" -e "s#@REPOSITORY@#$repository#g" Resources/Info.plist >"$app/Contents/Info.plist"
 cp Resources/Icons/*.pdf "$app/Contents/Resources/"
 cp Resources/Fonts/*.ttf Resources/Fonts/OFL.txt "$app/Contents/Resources/Fonts/"
-cp ../agent-usage@local/bin/agent-usage-claude ../agent-usage@local/bin/agent-usage-codex "$app/Contents/Resources/bin/"
+cp ../agent-usage@local/bin/agent-usage-claude ../agent-usage@local/bin/agent-usage-codex agent-usage "$app/Contents/Resources/bin/"
 chmod 755 "$app/Contents/Resources/bin/"*
 
 codesign --force --sign - --timestamp=none "$app"

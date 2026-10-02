@@ -7,9 +7,18 @@
 #
 # Or clone first and run it from the clone; it then installs from wherever
 # that clone came from. AGENT_USAGE_REPO overrides where it clones from.
+#
+# On a Mac the same line installs the menu bar app instead: it downloads the
+# newest release's app, without git, and lets the app's own agent-usage
+# command install it into ~/Applications.
 
 main() {
   set -euo pipefail
+
+  if [[ $(uname -s) == Darwin ]]; then
+    main_macos
+    return
+  fi
 
   local dest="${XDG_DATA_HOME:-$HOME/.local/share}/agent-usage-gnome"
   local repo="${AGENT_USAGE_REPO:-}"
@@ -43,6 +52,25 @@ main() {
   fi
 
   exec "$dest/bin/agent-usage" update --reinstall
+}
+
+# curl, unlike a browser, doesn't mark the download as coming from the
+# internet, so macOS opens the app without asking about its developer.
+main_macos() {
+  local repo="${AGENT_USAGE_REPO:-brsnippe/agent-usage-gnome}"
+  repo=$(sed -E 's#^(https://|ssh://git@|git@)github\.com[:/]##; s#\.git$##' <<<"$repo")
+  local zip="${AGENT_USAGE_ZIP:-https://github.com/$repo/releases/latest/download/Agent-Usage-macOS.zip}"
+  local tmp
+  tmp=$(mktemp -d)
+
+  echo "Downloading Agent Usage for macOS from github.com/$repo …"
+  if ! curl -fL --progress-bar -o "$tmp/Agent-Usage-macOS.zip" "$zip"; then
+    echo "Couldn't download $zip. Does the newest release have a macOS build?" >&2
+    exit 1
+  fi
+  ditto -x -k "$tmp/Agent-Usage-macOS.zip" "$tmp"
+  "$tmp/Agent Usage.app/Contents/Resources/bin/agent-usage" install "$tmp/Agent Usage.app"
+  rm -rf "$tmp"
 }
 
 main "$@"

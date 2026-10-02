@@ -1,4 +1,5 @@
 import AppKit
+import ServiceManagement
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var model: AppModel?
@@ -46,6 +47,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settings?.show()
         return false
     }
+}
+
+// `agent-usage uninstall` asks the app to leave the login items before it
+// deletes it; only the app itself can.
+if CommandLine.arguments.contains("--unregister-login-item") {
+    try? SMAppService.mainApp.unregister()
+    exit(0)
 }
 
 let app = NSApplication.shared

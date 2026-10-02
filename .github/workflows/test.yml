@@ -16,7 +16,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y gjs libglib2.0-bin jq
 
       - name: Shell scripts parse
-        run: for f in *.sh bin/agent-usage scripts/*.sh test/*.sh agent-usage@local/bin/agent-usage-update; do bash -n "$f"; done
+        run: for f in *.sh bin/agent-usage scripts/*.sh test/*.sh agent-usage@local/bin/agent-usage-update macos/agent-usage macos/*.sh macos/test/*.sh; do bash -n "$f"; done
 
       - name: Python compiles
         run: |
@@ -50,6 +50,8 @@ jobs:
   # the box: the one from Apple's Command Line Tools (3.9).
   macos:
     runs-on: macos-15
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -82,6 +84,23 @@ jobs:
           for agent in claude codex; do
             /usr/bin/python3 -c 'import json, sys; r = json.load(open(sys.argv[1])); print(r["id"], "|", r["usageStatusText"])' "$usage/$agent.json"
           done
+
+      - name: Install, update and uninstall on macOS
+        timeout-minutes: 5
+        run: macos/test/cli-test.sh
+
+      # scripts/release.sh creates the GitHub release right after pushing the
+      # tag; this build usually finishes later, but waits for it if not.
+      - name: Attach the app to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for _ in $(seq 20); do
+            gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 && break
+            sleep 15
+          done
+          gh release upload "$GITHUB_REF_NAME" macos/build/Agent-Usage-macOS.zip --clobber
 
       - name: Keep the snapshots
         uses: actions/upload-artifact@v4
