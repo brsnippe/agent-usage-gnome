@@ -1,0 +1,324 @@
+#!/bin/bash
+# Agent Usage for macOS: install, update and inspect the menu bar app.
+#
+#   agent-usage update [--reinstall] [--pause]
+#   agent-usage version
+#   agent-usage latest
+#   agent-usage diagnose
+#   agent-usage uninstall [--purge]
+#   agent-usage install <app>       (what get.sh runs)
+#
+# This file lives inside the app (Contents/Resources/bin) and is linked into
+# ~/.local/bin. Everything is wrapped in main(), which bash reads in full
+# before running it: `update` replaces the very app this file is in. It's
+# written for the bash 3.2 that comes with macOS.
+#
+# For testing: AGENT_USAGE_ZIP replaces the download (a URL, file:// works),
+# AGENT_USAGE_NO_OPEN=1 leaves the app closed after installing.
+
+main() {
+  set -euo pipefail
+
+  local self
+  self=$(readlink -f "${BASH_SOURCE[0]}")
+  BUNDLE=$(cd "$(dirname "$self")/../../.." && pwd)
+  APP="$HOME/Applications/Agent Usage.app"
+  LINK="$HOME/.local/bin/agent-usage"
+  BUNDLE_ID="io.github.brsnippe.agent-usage"
+  REPO=$(plist "$BUNDLE" AgentUsageRepository)
+  REPO=${REPO:-brsnippe/agent-usage-gnome}
+  USAGE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/agents/usage"
+  CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/omarchy/agent-usage"
+  LOG="$HOME/Library/Logs/AgentUsage/agent-usage.log"
+
+  local command="${1:-help}"
+  [[ $# -gt 0 ]] && shift
+  case "$command" in
+  update) update "$@" ;;
+  install) install_app "${1:?usage: agent-usage install <app>}" ;;
+  version | --version | -v) version ;;
+  latest) latest ;;
+  diagnose) diagnose ;;
+  uninstall) uninstall "$@" ;;
+  help | --help | -h) usage ;;
+  *)
+    usage >&2
+    exit 2
+    ;;
+  esac
+}
+
+usage() {
+  cat <<'EOF'
+Usage: agent-usage <command>
+
+  update       Install the newest release
+                 --reinstall  reinstall even when already up to date
+                 --pause      wait for Enter at the end (used by the Update button)
+  version      Show the installed version and the newest release
+  latest       Print the newest release's version number
+  diagnose     Print what's needed to debug the app
+  uninstall    Remove the app and this command (--purge: also usage data, settings and logs)
+EOF
+}
+
+die() {
+  echo "agent-usage: $*" >&2
+  exit 1
+}
+
+plist() {
+  /usr/libexec/PlistBuddy -c "Print :$2" "$1/Contents/Info.plist" 2>/dev/null || true
+}
+
+installed_version() {
+  plist "$APP" AgentUsageVersion
+}
+
+# "0 6 1" from 0.6.1, v0.6.1 or 0.6.1-dev+3f2a1c; fails for anything else.
+release_of() {
+  local pattern='^v?([0-9]+)\.([0-9]+)\.([0-9]+)'
+  [[ $1 =~ $pattern ]] || return 1
+  echo "${BASH_REMATCH[1]} ${BASH_REMATCH[2]} ${BASH_REMATCH[3]}"
+}
+
+# Whether release $1 is newer than installed version $2, as the app decides
+# it: a development build isn't behind its own release, and an install
+# without a version is behind any release.
+is_newer() {
+  local new old
+  new=$(release_of "$1") || return 1
+  old=$(release_of "${2:-}") || return 0
+  # shellcheck disable=SC2086
+  set -- $new $old
+  if (($1 != $4)); then
+    (($1 > $4))
+  elif (($2 != $5)); then
+    (($2 > $5))
+  else
+    (($3 > $6))
+  fi
+}
+
+# GitHub's release page redirects to the newest release's tag. Unlike the
+# API, it has no hourly limit for anonymous use.
+latest() {
+  local url tag
+  url=$(curl -fsSIL -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest") ||
+    die "couldn't read the releases at github.com/$REPO."
+  [[ $url == */releases/tag/* ]] || die "no releases found at github.com/$REPO."
+  tag=${url##*/tag/}
+  release_of "$tag" >/dev/null || die "the newest release, $tag, isn't a version."
+  echo "${tag#v}"
+}
+
+version() {
+  local installed newest
+  installed=$(installed_version)
+  echo "installed: ${installed:-not installed}"
+  if newest=$(latest 2>/dev/null); then
+    if is_newer "$newest" "$installed"; then
+      echo "newest:    $newest (run: agent-usage update)"
+    else
+      echo "newest:    $newest (up to date)"
+    fi
+  else
+    echo "newest:    unknown (couldn't reach github.com/$REPO)"
+  fi
+}
+
+python_path() {
+  local candidate
+  for candidate in /Library/Developer/CommandLineTools/usr/bin/python3 \
+    /Applications/Xcode.app/Contents/Developer/usr/bin/python3 /opt/homebrew/bin/python3 /usr/local/bin/python3; do
+    if [[ -x $candidate ]]; then
+      echo "$candidate"
+      return
+    fi
+  done
+  return 1
+}
+
+stop_app() {
+  pkill -x AgentUsage 2>/dev/null || return 0
+  local _
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    pgrep -x AgentUsage >/dev/null || return 0
+    sleep 0.5
+  done
+  pkill -9 -x AgentUsage 2>/dev/null || true
+}
+
+update() {
+  local reinstall=false pause=false arg
+  for arg in "$@"; do
+    case "$arg" in
+    --reinstall) reinstall=true ;;
+    --pause) pause=true ;;
+    *) die "unknown option for update: $arg" ;;
+    esac
+  done
+  if $pause; then
+    trap 'echo; read -rp "Press Enter to close. " _' EXIT
+  fi
+
+  local installed newest
+  installed=$(installed_version)
+  if [[ -z ${AGENT_USAGE_ZIP:-} ]]; then
+    echo "Checking github.com/$REPO …"
+    newest=$(latest)
+    if ! $reinstall && [[ -n $installed ]] && ! is_newer "$newest" "$installed"; then
+      echo "Already up to date: $installed."
+      return 0
+    fi
+    echo "Installing $newest (installed: ${installed:-none}) …"
+  fi
+  download_and_install
+}
+
+download_and_install() {
+  local url="${AGENT_USAGE_ZIP:-https://github.com/$REPO/releases/latest/download/Agent-Usage-macOS.zip}"
+  local tmp
+  tmp=$(mktemp -d)
+  curl -fL --progress-bar -o "$tmp/Agent-Usage-macOS.zip" "$url" ||
+    die "couldn't download $url. Does the newest release have a macOS build?"
+  ditto -x -k "$tmp/Agent-Usage-macOS.zip" "$tmp"
+  [[ -d "$tmp/Agent Usage.app" ]] || die "$url has no Agent Usage.app in it."
+  install_app "$tmp/Agent Usage.app"
+  rm -rf "$tmp"
+}
+
+install_app() {
+  local new="$1" version
+  [[ -x "$new/Contents/MacOS/AgentUsage" ]] || die "$new isn't Agent Usage.app."
+  version=$(plist "$new" AgentUsageVersion)
+
+  stop_app
+  mkdir -p "$(dirname "$APP")"
+  rm -rf "$APP"
+  # ditto keeps the signature and permissions; the quarantine flag only
+  # comes with a browser download, but a copy that has one wouldn't open.
+  ditto "$new" "$APP"
+  xattr -dr com.apple.quarantine "$APP" 2>/dev/null || true
+  codesign --verify "$APP" 2>/dev/null || echo "Warning: the app's signature doesn't check out; macOS may refuse to open it." >&2
+
+  mkdir -p "$(dirname "$LINK")"
+  ln -sf "$APP/Contents/Resources/bin/agent-usage" "$LINK"
+  echo "Installed Agent Usage ${version:-} in ~/Applications."
+
+  if ! python_path >/dev/null; then
+    cat <<'EOF'
+
+Agent Usage needs Python 3 to collect usage, which comes with Apple's
+Command Line Tools. Install them with:
+
+  xcode-select --install
+EOF
+  fi
+  case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *)
+    echo
+    echo "To use the agent-usage command, add ~/.local/bin to your PATH:"
+    # shellcheck disable=SC2016
+    echo '  echo '\''export PATH="$HOME/.local/bin:$PATH"'\'' >>~/.zprofile'
+    ;;
+  esac
+
+  if [[ -z ${AGENT_USAGE_NO_OPEN:-} ]]; then
+    open "$APP"
+    echo
+    echo "It's running: look for the robot in the menu bar. It starts at login from now on."
+  fi
+}
+
+diagnose() {
+  echo "== Agent Usage for macOS =="
+  echo "macOS:      $(sw_vers -productVersion) ($(uname -m))"
+  echo "app:        $APP"
+  if [[ -d $APP ]]; then
+    echo "version:    $(installed_version)"
+    if codesign --verify "$APP" 2>/dev/null; then echo "signature:  ok"; else echo "signature:  broken"; fi
+  else
+    echo "version:    not installed"
+  fi
+  if pgrep -x AgentUsage >/dev/null; then echo "running:    yes (pid $(pgrep -x AgentUsage | tr '\n' ' '))"; else echo "running:    no"; fi
+  echo "command:    $LINK -> $(readlink "$LINK" 2>/dev/null || echo missing)"
+  local python
+  if python=$(python_path); then echo "python:     $python ($("$python" --version 2>&1))"; else echo "python:     missing (xcode-select --install)"; fi
+  echo "collectors: $(cd "$APP/Contents/Resources/bin" 2>/dev/null && ls -d agent-usage-* 2>/dev/null | tr '\n' ' ' || echo none)"
+  echo "codex:      $(PATH="$PATH:/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$HOME/.npm-global/bin" command -v codex || echo 'not found')"
+
+  # Whether a Claude login is there, never what it is.
+  local hashed
+  hashed="Claude Code-credentials-$(printf %s "$HOME/.claude" | shasum -a 256 | cut -c1-8)"
+  echo
+  echo "== Claude Code sign-in =="
+  for service in "Claude Code-credentials" "$hashed"; do
+    if security find-generic-password -s "$service" >/dev/null 2>&1; then
+      echo "keychain:   \"$service\" present"
+    else
+      echo "keychain:   \"$service\" absent"
+    fi
+  done
+  if [[ -f $HOME/.claude/.credentials.json ]]; then echo "file:       ~/.claude/.credentials.json present"; else echo "file:       ~/.claude/.credentials.json absent"; fi
+
+  echo
+  echo "== Records in $USAGE_DIR =="
+  if [[ -n ${python:-} ]] && ls "$USAGE_DIR"/*.json >/dev/null 2>&1; then
+    "$python" - "$USAGE_DIR"/*.json <<'EOF'
+import json, sys
+for path in sys.argv[1:]:
+    try:
+        r = json.load(open(path))
+    except Exception as error:
+        print(f"{path}: unreadable ({error})")
+        continue
+    limits = ", ".join(f"{l.get('title') or l.get('label')} {round(float(l.get('percent') or 0) * 100)}%" for l in r.get("limits") or [])
+    print(f"{r.get('id')}: updated {r.get('updatedAt')} | status {r.get('usageStatusText') or 'ok'} | "
+          f"limits {limits or 'none'}{' (stale)' if r.get('limitsStale') else ''} | prompts {r.get('totalPrompts')}")
+    if r.get("authHelpText"):
+        print(f"  help: {r.get('authHelpText')}")
+EOF
+  else
+    echo "none"
+  fi
+
+  echo
+  echo "== Settings =="
+  defaults read "$BUNDLE_ID" 2>/dev/null || echo "defaults"
+
+  echo
+  echo "== Log ($LOG) =="
+  tail -n 40 "$LOG" 2>/dev/null || echo "no log yet"
+}
+
+uninstall() {
+  local purge=false arg
+  for arg in "$@"; do
+    case "$arg" in
+    --purge) purge=true ;;
+    *) die "unknown option for uninstall: $arg" ;;
+    esac
+  done
+
+  # Take it out of the login items while the app is still there to ask.
+  if [[ -x "$APP/Contents/MacOS/AgentUsage" ]]; then
+    "$APP/Contents/MacOS/AgentUsage" --unregister-login-item 2>/dev/null || true
+  fi
+  stop_app
+  rm -rf "$APP" "$HOME/Library/Caches/AgentUsage"
+  if [[ -L $LINK ]]; then
+    rm -f "$LINK"
+  fi
+  echo "Removed Agent Usage."
+
+  if $purge; then
+    rm -rf "$HOME/Library/Logs/AgentUsage" "$USAGE_DIR" "$CACHE_DIR"
+    defaults delete "$BUNDLE_ID" 2>/dev/null || true
+    echo "Removed its usage data, settings and logs."
+  fi
+}
+
+main "$@"
+exit

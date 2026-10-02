@@ -16,7 +16,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y gjs libglib2.0-bin jq
 
       - name: Shell scripts parse
-        run: for f in *.sh bin/agent-usage scripts/*.sh test/*.sh agent-usage@local/bin/agent-usage-update; do bash -n "$f"; done
+        run: for f in *.sh bin/agent-usage scripts/*.sh test/*.sh agent-usage@local/bin/agent-usage-update macos/agent-usage macos/*.sh macos/test/*.sh; do bash -n "$f"; done
 
       - name: Python compiles
         run: |
@@ -50,12 +50,69 @@ jobs:
   # the box: the one from Apple's Command Line Tools (3.9).
   macos:
     runs-on: macos-15
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
       - name: Swift logic tests
         working-directory: macos
         run: swift test
+
+      - name: Build the app
+        run: macos/build-app.sh --zip
+
+      - name: Panel snapshots
+        timeout-minutes: 3
+        run: '"macos/build/Agent Usage.app/Contents/MacOS/AgentUsage" --snapshot macos/snapshots'
+
+      # The real app on a Mac with no agents signed in: it has to find Python
+      # and its bundled collectors, and their records have to land.
+      - name: The app starts and collects
+        timeout-minutes: 3
+        run: |
+          usage=~/.local/state/omarchy/agents/usage
+          "macos/build/Agent Usage.app/Contents/MacOS/AgentUsage" &
+          pid=$!
+          for _ in $(seq 90); do
+            [[ -f $usage/claude.json && -f $usage/codex.json ]] && break
+            sleep 1
+          done
+          kill -0 $pid
+          kill $pid
+          cat ~/Library/Logs/AgentUsage/agent-usage.log
+          for agent in claude codex; do
+            /usr/bin/python3 -c 'import json, sys; r = json.load(open(sys.argv[1])); print(r["id"], "|", r["usageStatusText"])' "$usage/$agent.json"
+          done
+
+      - name: Install, update and uninstall on macOS
+        timeout-minutes: 5
+        run: macos/test/cli-test.sh
+
+      # scripts/release.sh creates the GitHub release right after pushing the
+      # tag; this build usually finishes later, but waits for it if not.
+      - name: Attach the app to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for _ in $(seq 20); do
+            gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 && break
+            sleep 15
+          done
+          gh release upload "$GITHUB_REF_NAME" macos/build/Agent-Usage-macOS.zip --clobber
+
+      - name: Keep the snapshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshots
+          path: macos/snapshots/*.png
+
+      - name: Keep the app
+        uses: actions/upload-artifact@v4
+        with:
+          name: Agent-Usage-macOS
+          path: macos/build/Agent-Usage-macOS.zip
 
       - name: macOS's own Python
         run: /usr/bin/python3 --version

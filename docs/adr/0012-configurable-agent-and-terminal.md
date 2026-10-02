@@ -54,3 +54,5 @@ panel and the settings window, so *Try it* behaves exactly like the button.
   match `terminals.js`.
 - **The Update button reuses the terminal choice**
   ([0016](0016-versions-releases-and-update-check.md)).
+- **On macOS, the same settings open Mac terminals**
+  ([0020](0020-opening-the-agent-on-macos.md)).

@@ -1,8 +1,10 @@
-# Agent Usage for GNOME
+# Agent Usage for GNOME and macOS
 
 Omarchy's **Agents** panel as a GNOME Shell extension, in Omarchy's Kanagawa
 look. It shows Claude Code and Codex rate limits with reset countdowns, plus
 tokens by day and by model. That includes sessions you ran in **OpenCode v2**.
+
+On a Mac it's the same panel under a menu bar icon: see [macOS](#macos).
 
 - **Top bar:** a robot icon with your fullest limit (`61%`). It turns red at
   90% or more. It stays hidden until an agent has usage to show.
@@ -26,6 +28,80 @@ tokens by day and by model. That includes sessions you ran in **OpenCode v2**.
   opens your agent (OpenCode by default) in a terminal.
 - **Keyboard (panel open):** ←/→ (or h/l) switches agent, `r` refreshes,
   Esc closes.
+
+## macOS
+
+The same panel as a menu bar app, for macOS 13 (Ventura) and up, on Apple
+silicon and Intel.
+
+### Install on a Mac
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/brsnippe/agent-usage-gnome/main/get.sh | bash
+```
+
+On a Mac, `get.sh`:
+
+- downloads the newest release's app (no git, no GitHub account);
+- installs it as `~/Applications/Agent Usage.app` (no admin password);
+- adds the `agent-usage` command to `~/.local/bin`;
+- starts it. From then on it starts at login.
+
+The collectors need Python 3, which comes with Apple's Command Line Tools.
+Most developers have them already, since git needs them too. Otherwise:
+
+```bash
+xcode-select --install
+```
+
+Sign in to the agents you use, as on Linux (`claude auth login`,
+`codex login`). On a Mac, Claude Code keeps its login in the Keychain, and
+that's where the Claude collector reads it.
+
+**Downloaded the zip in a browser instead?** macOS then refuses to open the
+app, because Apple hasn't notarized it. Fix that once with:
+
+```bash
+xattr -dr com.apple.quarantine "Agent Usage.app"
+```
+
+### What's different from GNOME
+
+- **The robot is always in the menu bar,** even before there's usage to show.
+- **Clicks:**
+  - left-click opens the panel;
+  - right-click (a two-finger click on a trackpad) or Control-click opens your
+    agent;
+  - middle-click refreshes, on a mouse.
+
+  The keys are the same as on GNOME.
+- **Settings:** the panel's ⚙ button, or open Agent Usage again from Finder or
+  Spotlight. The options are GNOME's, plus *Start at login* and *Quit*.
+- **Terminals:** *Automatic* means Terminal. You can also pick iTerm2,
+  Ghostty, Kitty, Alacritty or WezTerm, or write a custom command such as
+  `open -na Ghostty --args -e {command}`. The agent starts in your login
+  shell, so it finds the same tools as in a terminal window.
+- **Updates:** the panel checks GitHub once a day. *vX.Y.Z available* in its
+  bottom line opens the settings, where **Update** installs the new version
+  and restarts the app. Nothing needs reloading.
+
+### Commands on a Mac
+
+```bash
+agent-usage update               # install the newest release
+agent-usage version              # installed version, and the newest release
+agent-usage diagnose             # what to paste when something looks wrong
+agent-usage uninstall            # remove the app (--purge: also data, settings, logs)
+```
+
+### Where things are on a Mac
+
+| What | Where |
+|---|---|
+| The app | `~/Applications/Agent Usage.app` |
+| Usage records | `~/.local/state/omarchy/agents/usage/`, as on Linux |
+| Settings | the `io.github.brsnippe.agent-usage` defaults |
+| Log | `~/Library/Logs/AgentUsage/agent-usage.log` |
 
 ## Refreshing
 
@@ -98,6 +174,9 @@ notification saying so, rather than a different terminal opening.
 Made for GNOME 46 (Ubuntu 24.04) and up.
 
 ## Install
+
+This and the next sections are about GNOME; on a Mac, see
+[Install on a Mac](#install-on-a-mac).
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/brsnippe/agent-usage-gnome/main/get.sh | bash
@@ -213,6 +292,18 @@ Around it, in the repository:
 | `install.sh`, `uninstall.sh`, `diagnose.sh`, `preview.sh` | Install, remove, debug and preview the extension |
 | `VERSION`, `CHANGELOG.md`, `scripts/release.sh` | Releases (see [Releasing](#releasing)) |
 | `patches/`, `test/` | The changes to Omarchy's collectors, and the tests |
+| `macos/` | The macOS app: see below |
+
+The macOS app lives in `macos/` and bundles the same two collectors:
+
+| Piece | What it does |
+|---|---|
+| `Sources/AgentUsageCore/` | Everything the panel decides without a screen, ported from `usage.js`, `updates.js`, `versions.js` and `terminals.js`. It also runs the collectors itself, since `agent-usage-update` needs bash 4 and a Mac has 3.2. Foundation only, so it builds and tests on Linux too |
+| `Sources/AgentUsage/` | The menu bar item, the panel (SwiftUI), the settings window, the timers, the update check, start at login |
+| `Resources/` | `Info.plist`, the icons as PDFs and JetBrains Mono |
+| `build-app.sh` | Builds `Agent Usage.app`: universal, signed ad hoc, with the collectors from `agent-usage@local/bin` |
+| `agent-usage` | The Mac's `agent-usage` command, inside the app |
+| `Tests/`, `test/` | The Swift tests, and the Mac's install, update and uninstall test |
 
 The folders keep Omarchy's names (`~/.local/state/omarchy/…` and
 `~/.cache/omarchy/agent-usage/`). That way the collectors stay as close to
@@ -236,7 +327,7 @@ aren't from upstream:
 
 - `patches/claude-limits-backoff.diff` adds the rate-limit back-off and the
   stale marking described under [Refreshing](#refreshing).
-- `patches/claude-macos-keychain.diff` is for the coming macOS app. On a Mac,
+- `patches/claude-macos-keychain.diff` is for the macOS app. On a Mac,
   Claude Code keeps its login in the Keychain rather than in
   `~/.claude/.credentials.json`, so this reads it from there. On Linux it
   changes nothing.
@@ -275,7 +366,9 @@ The script:
 - creates the GitHub release with that changelog section as its notes.
 
 GitHub Actions runs the same tests on every push and checks that a release
-tag matches `VERSION`. Installs see the release the next time someone runs
+tag matches `VERSION`. On a release tag it also builds the macOS app and
+attaches `Agent-Usage-macOS.zip` to the release, which is what `get.sh`
+installs on a Mac. Installs see the release the next time someone runs
 `agent-usage update`, or the next time their panel checks.
 
 Tests, all without GNOME:
@@ -285,11 +378,21 @@ for t in test/*-test.js; do gjs -m "$t"; done   # panel logic
 python3 test/claude-limits-test.py              # Claude limits back-off
 python3 test/claude-keychain-test.py            # Claude sign-in from the macOS Keychain
 test/cli-test.sh                                # install, update, uninstall from git
+(cd macos && swift test)                        # the macOS app's logic, on Linux too
 ```
+
+On every push and pull request, a macOS job on GitHub also:
+- builds the app;
+- draws the panel to PNGs, kept as the `snapshots` artifact;
+- starts the app and waits for the collectors' records;
+- runs `macos/test/cli-test.sh` to install, update and uninstall it.
+
+See [0022](docs/adr/0022-testing-the-macos-app.md).
 
 ## License
 
 The collectors come from [Omarchy](https://github.com/omacom/omarchy), and
 the panel is a port of Omarchy's `omarchy.agents` widget. Both are under
 Omarchy's MIT license (see `LICENSE`). The Claude and Codex logos belong to
-their owners.
+their owners. The macOS app bundles JetBrains Mono, under the SIL Open Font
+License (`macos/Resources/Fonts/OFL.txt`).
