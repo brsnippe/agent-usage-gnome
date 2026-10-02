@@ -189,8 +189,9 @@ from the GNOME Shell log.
 
 ## How it works
 
-| Piece | What it does |
-|---|---|
+Why it's built this way, decision by decision:
+[docs/adr/](docs/adr/README.md).
+
 The extension lives in `agent-usage@local/`:
 
 | Piece | What it does |
