@@ -7,6 +7,9 @@ import Foundation
 public enum Panel {
     public static let emptyText = "No AI coding subscriptions found.\nAgents show up here once you've used them."
 
+    public static let noPythonText =
+        "Agent Usage needs Python 3 to collect usage. It comes with Apple's Command Line Tools: run `xcode-select --install` in Terminal."
+
     /// How far a stale menu bar number is dimmed: GNOME's opacity 140 of 255.
     public static let staleOpacity = 140.0 / 255.0
 
