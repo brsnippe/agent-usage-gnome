@@ -3,6 +3,33 @@
 Versions are git tags (`v0.6.0`, …). `agent-usage update` installs the newest
 one.
 
+## 0.7.0
+
+The same panel on a Mac, as a native menu bar app (macOS 13 and up, Apple
+silicon and Intel). Nothing changes on GNOME.
+
+- **Install:** the same `curl … get.sh | bash` line. On a Mac it downloads
+  the app from this release, installs it in `~/Applications` with the
+  `agent-usage` command, and starts it. It starts at login from then on.
+- **Menu bar:** the robot and the fullest limit, red at 90%, faded while
+  stale. Unlike on GNOME, the robot is always there.
+- **Panel:** every section of the GNOME panel, in Kanagawa and JetBrains
+  Mono.
+  - Left-click opens it, right-click or Control-click opens your agent, and
+    a middle-click refreshes.
+  - ←/→, h/l, `r` and Esc work as on GNOME.
+- **Settings:** the GNOME options (refresh intervals, agent, terminal,
+  update check), plus *Start at login* and *Quit*.
+- **Terminals:** Terminal, iTerm2, Ghostty, Kitty, Alacritty, WezTerm, or a
+  custom command. The agent starts in your login shell.
+- **Updates:** a daily check, the *vX.Y.Z available* notice, and an Update
+  button that installs the new version and restarts the app.
+- **Commands:** `agent-usage update`, `version`, `diagnose` and
+  `uninstall [--purge]`.
+- **Claude on a Mac:** a new patch, `claude-macos-keychain.diff`, lets the
+  Claude collector read Claude Code's login from the macOS Keychain. On
+  Linux it changes nothing.
+
 ## 0.6.0
 
 The first tagged release. It brings together everything from the

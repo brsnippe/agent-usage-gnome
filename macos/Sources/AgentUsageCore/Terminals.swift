@@ -27,6 +27,12 @@ public struct TerminalApp: Equatable {
     public var style: Style
 }
 
+/// One entry of a settings list: the id it stores, the label it shows.
+public struct Choice: Equatable, Hashable {
+    public var id: String
+    public var label: String
+}
+
 public struct LaunchPrefs: Equatable {
     /// `opencode`, `claude`, `codex` or `custom`.
     public var agent: String
@@ -135,6 +141,23 @@ public enum Terminals {
 
     public static func installedTerminals(on machine: Machine) -> [TerminalApp] {
         terminals.filter { machine.findApp($0) != nil }
+    }
+
+    /// The settings window's agents: all of them, marked when this Mac
+    /// doesn't have one.
+    public static func agentChoices(on machine: Machine) -> [Choice] {
+        agents.map { Choice(id: $0.id, label: machine.findProgram($0.command) == nil ? "\($0.name) (not installed)" : $0.name) }
+            + [Choice(id: "custom", label: "Custom…")]
+    }
+
+    /// The settings window's terminals: the installed ones, plus the current
+    /// choice if it has since been uninstalled, so the list can still show it.
+    public static func terminalChoices(current: String, on machine: Machine) -> [Choice] {
+        let installed = installedTerminals(on: machine)
+        let listed = terminals.filter { installed.contains($0) || $0.id == current }
+        return [Choice(id: "auto", label: "Automatic (Terminal)")]
+            + listed.map { Choice(id: $0.id, label: installed.contains($0) ? $0.name : "\($0.name) (not installed)") }
+            + [Choice(id: "custom", label: "Custom…")]
     }
 
     public static func findAppInFolders(_ terminal: TerminalApp, home: String) -> String? {

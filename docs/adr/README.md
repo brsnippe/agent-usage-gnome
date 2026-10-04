@@ -27,6 +27,10 @@ Omarchy's top bar?
 That port grew into this repository. It went through six hand-delivered
 builds before becoming the first tagged release, v0.6.0.
 
+Then coworkers with MacBooks wanted the same panel, which became a native
+macOS menu bar app in `macos/` ([0018](0018-native-macos-app.md)), built and
+tested without a Mac at hand ([0022](0022-testing-the-macos-app.md)).
+
 ## How it was built
 
 It was built iteratively with an AI coding agent: Claude Opus 5.5, running in
@@ -66,6 +70,11 @@ It was built iteratively with an AI coding agent: Claude Opus 5.5, running in
 | [0015](0015-distribute-via-git.md) | Distribute via git with `get.sh` and the `agent-usage` command | Accepted |
 | [0016](0016-versions-releases-and-update-check.md) | Versions, releases and the update check | Accepted |
 | [0017](0017-testing-without-gnome-shell.md) | Test without GNOME Shell | Accepted |
+| [0018](0018-native-macos-app.md) | A native macOS menu bar app | Accepted |
+| [0019](0019-claude-login-from-the-macos-keychain.md) | Read Claude Code's login from the macOS Keychain | Accepted |
+| [0020](0020-opening-the-agent-on-macos.md) | Opening the agent on macOS | Accepted |
+| [0021](0021-install-on-macos-from-the-release-zip.md) | Install on macOS from the release zip | Accepted |
+| [0022](0022-testing-the-macos-app.md) | Test the macOS app without a Mac | Accepted |
 
 ## Open items
 
@@ -73,7 +82,7 @@ It was built iteratively with an AI coding agent: Claude Opus 5.5, running in
   providers, e.g. free models like `big-pickle`. Omarchy has separate PRs for
   an OpenCode collector.
 - **The upstream fixes aren't merged yet.** Once #13894 and #7686 are in
-  Omarchy, switch to Omarchy's collectors. Reapply this project's own patch
+  Omarchy, switch to Omarchy's collectors. Reapply this project's own patches
   to the Claude collector ([0005](0005-collector-changes-as-patches.md)).
 - **The rate-limit back-off hasn't been offered upstream.** Omarchy's widget
   checks only every 15 minutes, so it rarely meets the problem, but the
@@ -84,3 +93,15 @@ It was built iteratively with an AI coding agent: Claude Opus 5.5, running in
   the panel renders in the system font. That was left as is.
 - **No `scripts/sync-upstream.sh`.** A script to fetch Omarchy's latest
   collectors and reapply the patches was considered but not built.
+- **The Mac app hasn't run on a coworker's Mac yet.** What the trial has to
+  confirm:
+  - iTerm2 and the `open -na` terminals ([0020](0020-opening-the-agent-on-macos.md));
+  - a possible Keychain prompt ([0019](0019-claude-login-from-the-macos-keychain.md));
+  - start at login with an ad-hoc signed app
+    ([0021](0021-install-on-macos-from-the-release-zip.md));
+  - the panel window's behaviour.
+- **The Mac app isn't notarized.** Browser downloads need the `xattr` line
+  until there's an Apple Developer account
+  ([0021](0021-install-on-macos-from-the-release-zip.md)).
+- **Two implementations of the panel's logic:** `usage.js` and the Swift
+  port ([0018](0018-native-macos-app.md)).

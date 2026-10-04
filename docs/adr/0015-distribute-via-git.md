@@ -59,3 +59,5 @@ than they give for a handful of users.
   themselves.
 - **`test/cli-test.sh`** checks the whole flow against a local bare
   repository ([0017](0017-testing-without-gnome-shell.md)).
+- **On a Mac, the same `get.sh` line installs the app from the release zip
+  instead,** without git ([0021](0021-install-on-macos-from-the-release-zip.md)).
