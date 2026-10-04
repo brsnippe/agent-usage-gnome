@@ -59,16 +59,16 @@ export default class AgentUsagePreferences extends ExtensionPreferences {
         versionRow.add_suffix(button);
         group.add(versionRow);
 
-        const daily = new Adw.SwitchRow({
-            title: 'Check daily for a new version',
-            subtitle: 'Asks the git repository this was installed from. The panel says when one is out.',
+        const check = new Adw.SwitchRow({
+            title: 'Check for new versions',
+            subtitle: 'Every hour and after waking from sleep. Asks the git repository this was installed from. The panel says when one is out.',
         });
-        settings.bind('check-updates', daily, 'active', Gio.SettingsBindFlags.DEFAULT);
-        group.add(daily);
+        settings.bind('check-updates', check, 'active', Gio.SettingsBindFlags.DEFAULT);
+        group.add(check);
 
         if (!sourceDir) {
             versionRow.subtitle = `${shown} · not installed from git, so it can't update itself. Reinstall with get.sh (see the README).`;
-            daily.sensitive = false;
+            check.sensitive = false;
             return group;
         }
 

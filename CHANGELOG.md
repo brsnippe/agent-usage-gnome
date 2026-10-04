@@ -3,6 +3,16 @@
 Versions are git tags (`v0.6.0`, …). `agent-usage update` installs the newest
 one.
 
+## 0.8.1
+
+New releases show up sooner. On GNOME and on a Mac.
+
+- **Updates:** the panel checks for a new version every hour instead of once
+  a day, and also after the computer wakes from sleep (on a Mac, also after
+  unlocking). The daily timer stopped while the computer slept, so on a
+  laptop it often ran only every few days.
+- **Settings:** the switch is now called *Check for new versions*.
+
 ## 0.8.0
 
 Desktop apps, and signing in again from the panel. On GNOME and on a Mac.

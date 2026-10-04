@@ -15,8 +15,8 @@
     </key>
     <key name="check-updates" type="b">
       <default>true</default>
-      <summary>Check daily for a new release</summary>
-      <description>Asks the git repository this was installed from for its newest release tag, once a day.</description>
+      <summary>Check for new releases</summary>
+      <description>Asks the git repository this was installed from for its newest release tag, every hour and after waking from sleep.</description>
     </key>
     <key name="agent" type="s">
       <choices>

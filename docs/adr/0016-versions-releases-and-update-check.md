@@ -39,7 +39,8 @@ clean `main` with a `## X.Y.Z` changelog section. It then:
 - on a tag, the tag matches `VERSION`.
 
 **The update check:**
-- **When:** once a day, starting a minute after login.
+- **When:** once a day, starting a minute after login. Now every hour, and
+  after waking from sleep ([0024](0024-check-for-releases-hourly.md)).
 - **How:** the extension runs `agent-usage latest`, which calls
   `git ls-remote`. It never prompts for a password or host key, so it also
   works for private repositories through existing git access.

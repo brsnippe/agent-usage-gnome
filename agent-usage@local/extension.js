@@ -27,9 +27,12 @@ const RETRY_SECONDS = 30;
 const TICK_SECONDS = 30;
 // After waking from sleep, give the network a moment before checking.
 const WAKE_DELAY_SECONDS = 5;
-// New releases: once a day, starting a minute after login.
-const RELEASE_CHECK_SECONDS = 24 * 3600;
+// New releases: every hour, starting a minute after login, and after waking
+// from sleep unless the last check was recent. The hourly timer doesn't run
+// while the machine sleeps.
+const RELEASE_CHECK_SECONDS = 3600;
 const FIRST_RELEASE_CHECK_SECONDS = 60;
+const WAKE_RELEASE_CHECK_SECONDS = 15 * 60;
 // After a sign-in button: check that agent's limits this often, this many
 // times, until the problem is gone.
 const SIGN_IN_CHECK_SECONDS = 15;
@@ -130,6 +133,7 @@ class AgentUsageIndicator extends PanelMenu.Button {
         this._scanTimerId = 0;
         this._sleepSubscription = 0;
         this._releaseTimerId = 0;
+        this._lastReleaseCheck = 0;
         this._signInId = 0;
         this._installedVersion = String(extension.metadata['version-name'] ?? '');
         this._sourceDir = this._readSourceDir();
@@ -225,7 +229,14 @@ class AgentUsageIndicator extends PanelMenu.Button {
         }));
     }
 
+    // The wall clock, unlike the timers, counts the time spent asleep.
+    _checkForReleaseAfterWake() {
+        if (this._releaseTimerId && Date.now() - this._lastReleaseCheck >= WAKE_RELEASE_CHECK_SECONDS * 1000)
+            this._checkForRelease();
+    }
+
     _checkForRelease() {
+        this._lastReleaseCheck = Date.now();
         let proc;
         try {
             proc = Gio.Subprocess.new([`${this._sourceDir}/bin/agent-usage`, 'latest'],
@@ -272,6 +283,7 @@ class AgentUsageIndicator extends PanelMenu.Button {
             this._sources.delete(this._wakeId);
             this._wakeId = 0;
             this._runUpdate('normal');
+            this._checkForReleaseAfterWake();
             return GLib.SOURCE_REMOVE;
         }));
     }

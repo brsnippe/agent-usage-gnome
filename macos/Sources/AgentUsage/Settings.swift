@@ -192,11 +192,11 @@ struct SettingsView: View {
                         }
                     }
                 }
-                Toggle("Check daily for a new version", isOn: $checkUpdates)
+                Toggle("Check for new versions", isOn: $checkUpdates)
             } header: {
                 Text("Updates")
             } footer: {
-                note("Asks GitHub for the newest release. The panel says when one is out.")
+                note("Every hour, and after waking or unlocking the Mac. Asks GitHub for the newest release. The panel says when one is out.")
             }
         }
         .formStyle(.grouped)

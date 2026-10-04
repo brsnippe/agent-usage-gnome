@@ -76,6 +76,7 @@ It was built iteratively with an AI coding agent: Claude Opus 5.5, running in
 | [0021](0021-install-on-macos-from-the-release-zip.md) | Install on macOS from the release zip | Accepted |
 | [0022](0022-testing-the-macos-app.md) | Test the macOS app without a Mac | Accepted |
 | [0023](0023-desktop-apps-and-sign-in-buttons.md) | Desktop apps as agents, and sign-in buttons in the problem card | Accepted |
+| [0024](0024-check-for-releases-hourly.md) | Check for releases every hour, and after waking | Accepted |
 
 ## Open items
 

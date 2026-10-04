@@ -61,7 +61,8 @@ permission.
   remote, so a fork checks its own releases.
 
 **The update check:**
-- **When:** once a day, starting a minute after launch.
+- **When:** once a day, starting a minute after launch. Now every hour, and
+  after waking or unlocking ([0024](0024-check-for-releases-hourly.md)).
 - **How:** GitHub's releases API, since the repository is public. When the
   API's limit of 60 anonymous calls an hour runs out on a shared network (it
   did on GitHub's own CI Macs), it falls back to github.com's

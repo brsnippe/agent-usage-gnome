@@ -84,9 +84,10 @@ xattr -dr com.apple.quarantine "Agent Usage.app"
   shell, so it finds the same tools as in a terminal window.
 - **Desktop apps:** *Claude (desktop app)* opens `Claude.app`, and
   *OpenCode (desktop app)* opens `OpenCode.app`, with `open -a`.
-- **Updates:** the panel checks GitHub once a day. *vX.Y.Z available* in its
-  bottom line opens the settings, where **Update** installs the new version
-  and restarts the app. Nothing needs reloading.
+- **Updates:** the panel checks GitHub every hour, and after the Mac wakes or
+  unlocks. *vX.Y.Z available* in its bottom line opens the settings, where
+  **Update** installs the new version and restarts the app. Nothing needs
+  reloading.
 
 ### Commands on a Mac
 
@@ -240,10 +241,10 @@ agent-usage update     # install the newest release
 agent-usage version    # installed version, and the newest release
 ```
 
-The panel checks once a day. When a new version is out, its bottom line says
-*v0.6.1 available*. Clicking that opens ⚙, where **Update** runs
-`agent-usage update` in your terminal. The daily check can be switched off
-there.
+The panel checks every hour, and after the computer wakes from sleep. When a
+new version is out, its bottom line says *v0.6.1 available*. Clicking that
+opens ⚙, where **Update** runs `agent-usage update` in your terminal. The
+check can be switched off there.
 
 Other commands:
 

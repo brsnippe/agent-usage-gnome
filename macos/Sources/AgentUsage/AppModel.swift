@@ -26,6 +26,7 @@ final class AppModel {
     private var timers: [Timer] = []
     private var retryTimer: Timer?
     private var releaseTimer: Timer?
+    private var lastReleaseCheck: Date?
     private var signInTimer: Timer?
     private var signInChecksLeft = 0
     private var observers: [(NotificationCenter, NSObjectProtocol)] = []
@@ -37,9 +38,12 @@ final class AppModel {
     static let retrySeconds: TimeInterval = 30
     /// After waking from sleep, give the network a moment before checking.
     static let wakeDelaySeconds: TimeInterval = 5
-    /// New releases: once a day, starting a minute after launch.
-    static let releaseCheckSeconds: TimeInterval = 24 * 3600
+    /// New releases: every hour, starting a minute after launch, and after
+    /// waking or unlocking unless the last check was recent. The hourly timer
+    /// doesn't run while the Mac sleeps.
+    static let releaseCheckSeconds: TimeInterval = 3600
     static let firstReleaseCheckSeconds: TimeInterval = 60
+    static let wakeReleaseCheckSeconds: TimeInterval = 15 * 60
     /// After a sign-in button: check that agent's limits this often, this
     /// many times, until the problem is gone.
     static let signInCheckSeconds: TimeInterval = 15
@@ -202,6 +206,7 @@ final class AppModel {
         observe(distributed, Notification.Name("com.apple.screenIsUnlocked")) { [weak self] in
             self?.locked = false
             self?.runUpdate(.normal)
+            self?.checkForReleaseAfterWake()
         }
         observe(NotificationCenter.default, UserDefaults.didChangeNotification) { [weak self] in self?.settingsChanged() }
     }
@@ -214,6 +219,7 @@ final class AppModel {
     private func woke() {
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.wakeDelaySeconds) { [weak self] in
             self?.runScheduled(.normal)
+            self?.checkForReleaseAfterWake()
         }
     }
 
@@ -251,7 +257,19 @@ final class AppModel {
         }
     }
 
+    /// The wall clock, unlike the timers, counts the time spent asleep.
+    private func checkForReleaseAfterWake() {
+        guard releaseTimer != nil else {
+            return
+        }
+        if let last = lastReleaseCheck, Date().timeIntervalSince(last) < Self.wakeReleaseCheckSeconds {
+            return
+        }
+        checkForRelease()
+    }
+
     private func checkForRelease() {
+        lastReleaseCheck = Date()
         ReleaseChecker.latest { [weak self] result in
             switch result {
             case .success(let latest):
