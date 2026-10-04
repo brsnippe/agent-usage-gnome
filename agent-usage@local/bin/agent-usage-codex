@@ -629,6 +629,11 @@ def fetch_codex_rpc():
     proc.stdin.write(json.dumps({"method": "initialized", "params": {}}) + "\n")
     proc.stdin.flush()
     account_msg = rpc_request(proc, 2, "account/read", timeout=4)
+    # Signed out, the app server answers with no account rather than an
+    # error, and there are no limits to read.
+    if not (account_msg.get("result") or {}).get("account") and (account_msg.get("result") or {}).get("requiresOpenaiAuth"):
+      result["usageStatusText"] = "Not signed in"
+      return result
     limits_msg = rpc_request(proc, 3, "account/rateLimits/read", timeout=4)
 
     account = (account_msg.get("result") or {}).get("account") or {}

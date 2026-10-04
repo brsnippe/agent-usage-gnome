@@ -10,6 +10,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Pango from 'gi://Pango';
+import Shell from 'gi://Shell';
 import St from 'gi://St';
 
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
@@ -29,6 +30,10 @@ const WAKE_DELAY_SECONDS = 5;
 // New releases: once a day, starting a minute after login.
 const RELEASE_CHECK_SECONDS = 24 * 3600;
 const FIRST_RELEASE_CHECK_SECONDS = 60;
+// After a sign-in button: check that agent's limits this often, this many
+// times, until the problem is gone.
+const SIGN_IN_CHECK_SECONDS = 15;
+const SIGN_IN_CHECKS = 20;
 const LAUNCH_KEYS = ['agent', 'agent-command', 'terminal', 'terminal-command'];
 
 // Kanagawa, as Omarchy draws it. The bars are painted with Cairo, so they
@@ -125,6 +130,7 @@ class AgentUsageIndicator extends PanelMenu.Button {
         this._scanTimerId = 0;
         this._sleepSubscription = 0;
         this._releaseTimerId = 0;
+        this._signInId = 0;
         this._installedVersion = String(extension.metadata['version-name'] ?? '');
         this._sourceDir = this._readSourceDir();
         this._newRelease = null;
@@ -425,7 +431,52 @@ class AgentUsageIndicator extends PanelMenu.Button {
             Main.notify('Agent usage', launch.error);
             return;
         }
-        Util.spawn(launch.argv);
+        if (launch.desktopId)
+            this._openApp(launch.desktopId);
+        else
+            Util.spawn(launch.argv);
+    }
+
+    // Brings the app forward when it's already open, and starts it otherwise.
+    _openApp(desktopId) {
+        const app = Shell.AppSystem.get_default().lookup_app(desktopId);
+        if (app)
+            app.activate();
+        else
+            Main.notify('Agent usage', `Couldn't open ${desktopId}.`);
+    }
+
+    // The problem card's buttons: a command-line tool in the chosen terminal.
+    _signInCommand(action) {
+        return Terminals.commandArgv(Terminals.launchSettings(this._settings), action.command, {pause: action.pause});
+    }
+
+    _signIn(id, action) {
+        const terminal = this._signInCommand(action);
+        if (terminal.error) {
+            Main.notify('Agent usage', terminal.error);
+            return;
+        }
+        Util.spawn(terminal.argv);
+        this._followSignIn(id);
+    }
+
+    // Signing in happens in a browser or another window; keep checking that
+    // agent's limits until the problem is gone, so the panel catches up on
+    // its own.
+    _followSignIn(id) {
+        this._signInId = this._removeSource(this._signInId);
+        let checks = 0;
+        this._signInId = this._addSource(GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, SIGN_IN_CHECK_SECONDS, () => {
+            const record = this._records.find(candidate => String(candidate.id) === id);
+            if (checks++ >= SIGN_IN_CHECKS || Usage.signInActions(record).length === 0) {
+                this._sources.delete(this._signInId);
+                this._signInId = 0;
+                return GLib.SOURCE_REMOVE;
+            }
+            this._runUpdate('limits', [id]);
+            return GLib.SOURCE_CONTINUE;
+        }));
     }
 
     // ------------------------------------------------------------ menu
@@ -530,11 +581,8 @@ class AgentUsageIndicator extends PanelMenu.Button {
         if (this._providers.length > 1)
             this._panel.add_child(this._tabs());
 
-        if (String(record.usageStatusText || '') !== '' && String(record.authHelpText || '') !== '') {
-            const card = new St.BoxLayout({style_class: 'agent-usage-status', x_expand: true});
-            card.add_child(wrappingLabel(String(record.authHelpText), 'agent-usage-status-text'));
-            this._panel.add_child(card);
-        }
+        if (String(record.usageStatusText || '') !== '' && String(record.authHelpText || '') !== '')
+            this._panel.add_child(this._problemCard(record));
 
         const balance = Usage.balanceValue(record.balance);
         const limits = Usage.limitWindows(record);
@@ -621,12 +669,11 @@ class AgentUsageIndicator extends PanelMenu.Button {
         hero.add_child(text);
 
         hero.add_child(this._action('view-refresh-symbolic', 'Refresh now (r)', () => this._runUpdate('force')));
-        // Hidden when there is no agent to open; a missing terminal still gets
-        // the button, so clicking it says what's wrong.
         const launch = this._launch();
-        if (launch.reason !== 'agent') {
-            const hint = launch.error ? `Open ${launch.agentName}` : `Open ${launch.agentName} in ${launch.terminalName}`;
-            hero.add_child(this._action('utilities-terminal-symbolic', hint, () => {
+        const hint = Terminals.buttonHint(launch);
+        if (hint !== null) {
+            const icon = launch.opensApp ? 'application-x-executable-symbolic' : 'utilities-terminal-symbolic';
+            hero.add_child(this._action(icon, hint, () => {
                 this.menu.close();
                 this._launchAgent();
             }));
@@ -636,6 +683,34 @@ class AgentUsageIndicator extends PanelMenu.Button {
             this._extension.openPreferences();
         }));
         return hero;
+    }
+
+    // What's wrong and what to do about it, with buttons when the fix is
+    // signing in again.
+    _problemCard(record) {
+        const card = new St.BoxLayout({vertical: true, style_class: 'agent-usage-status', x_expand: true});
+        card.add_child(wrappingLabel(String(record.authHelpText), 'agent-usage-status-text'));
+        const actions = Usage.signInActions(record);
+        if (actions.length === 0)
+            return card;
+        const row = new St.BoxLayout({style_class: 'agent-usage-status-actions'});
+        for (const action of actions) {
+            const button = new St.Button({
+                label: action.label,
+                style_class: 'agent-usage-status-button',
+                can_focus: true,
+                track_hover: true,
+            });
+            button.connect('clicked', () => {
+                this.menu.close();
+                this._signIn(String(record.id), action);
+            });
+            const terminal = this._signInCommand(action);
+            this._hover(button, terminal.error ?? `Runs ${action.command.join(' ')} in ${terminal.terminalName}`);
+            row.add_child(button);
+        }
+        card.add_child(row);
+        return card;
     }
 
     _tabs() {

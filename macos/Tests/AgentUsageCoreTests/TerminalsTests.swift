@@ -6,7 +6,7 @@ import XCTest
 final class TerminalsTests: XCTestCase {
     static let home = "/Users/me"
 
-    /// A fake Mac: which programs and terminal apps exist.
+    /// A fake Mac: which programs, terminals and desktop apps exist.
     func machine(programs: [String] = ["opencode", "claude"], apps: [String] = ["Terminal.app", "Ghostty.app"]) -> Machine {
         Machine(
             findProgram: { name in
@@ -15,7 +15,7 @@ final class TerminalsTests: XCTestCase {
                 }
                 return programs.contains(name) ? "/opt/homebrew/bin/\(name)" : nil
             },
-            findApp: { terminal in apps.contains(terminal.appName) ? "/Applications/\(terminal.appName)" : nil },
+            findApp: { app in apps.contains(app.appName) ? "/Applications/\(app.appName)" : nil },
             shell: "/bin/zsh",
             home: Self.home
         )
@@ -114,6 +114,49 @@ final class TerminalsTests: XCTestCase {
         XCTAssertEqual(Terminals.buttonHint(launch()), "Open OpenCode in Terminal")
         XCTAssertEqual(Terminals.buttonHint(launch(LaunchPrefs(terminal: "kitty"))), "Open OpenCode", "a missing terminal keeps the button")
         XCTAssertNil(Terminals.buttonHint(launch(LaunchPrefs(agent: "codex"))), "a missing agent hides it")
+        XCTAssertEqual(Terminals.buttonHint(launch(LaunchPrefs(agent: "claude-desktop"), on: machine(apps: ["Claude.app"]))), "Open Claude (desktop app)")
+    }
+
+    func testDesktopApps() throws {
+        let mac = machine(apps: ["Terminal.app", "Claude.app", "OpenCode.app"])
+        let claude = try launch(LaunchPrefs(agent: "claude-desktop", terminal: "kitty"), on: mac).get()
+        XCTAssertEqual(claude, Launch(argv: ["/usr/bin/open", "-a", "/Applications/Claude.app"], script: nil, command: [],
+                                      agentName: "Claude (desktop app)", terminalName: "", opensApp: true),
+                       "opened with open -a, whatever the terminal")
+        XCTAssertEqual(claude.display(home: Self.home), "/usr/bin/open -a /Applications/Claude.app")
+        XCTAssertEqual(argv(launch(LaunchPrefs(agent: "opencode-desktop"), on: mac)), ["/usr/bin/open", "-a", "/Applications/OpenCode.app"])
+        XCTAssertEqual(error(launch(LaunchPrefs(agent: "opencode-desktop"))),
+                       LaunchError(message: "OpenCode (desktop app) isn't installed.", reason: .agent, agentName: "OpenCode (desktop app)"),
+                       "a missing desktop app hides the button")
+    }
+
+    // The problem card's sign-in commands, in the chosen terminal.
+    func testSignInCommands() {
+        let login = Terminals.commandLaunch(LaunchPrefs(terminal: "ghostty"), command: ["claude", "auth", "login"], pause: true, on: machine())
+        XCTAssertEqual(login.map(\.argv), .success(["/usr/bin/open", "-na", "/Applications/Ghostty.app", "--args", "-e"]
+                + inShell(Terminals.withPause(["/opt/homebrew/bin/claude", "auth", "login"]).map(ShellWords.quote).joined(separator: " "))))
+        XCTAssertEqual(Terminals.commandLaunch(LaunchPrefs(), command: ["claude"], on: machine()).map(\.script),
+                       .success("#!/bin/sh\nexec '/opt/homebrew/bin/claude'\n"), "starting Claude Code needs no pause")
+        XCTAssertEqual(Terminals.commandLaunch(LaunchPrefs(), command: ["codex", "login"], pause: true, on: machine()).map(\.argv),
+                       .failure(LaunchError(message: "codex isn't installed.", reason: .agent, agentName: "")))
+        XCTAssertEqual(Terminals.withPause(["claude", "auth", "login"]).suffix(4), ["sh", "claude", "auth", "login"])
+    }
+
+    /// The pause, for real: the output stays, then Enter (here: end of input)
+    /// closes it with the command's own exit status.
+    func testPauseRuns() throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = Array(Terminals.withPause(["sh", "-c", "echo signed in; exit 3"]).dropFirst())
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardInput = Pipe()
+        try process.run()
+        (process.standardInput as? Pipe)?.fileHandleForWriting.closeFile()
+        process.waitUntilExit()
+        let text = String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        XCTAssertEqual(text, "signed in\n\nPress Enter to close this window. ")
+        XCTAssertEqual(process.terminationStatus, 3)
     }
 
     // The Update button runs `agent-usage update` in the chosen terminal.

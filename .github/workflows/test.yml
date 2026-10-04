@@ -39,6 +39,9 @@ jobs:
       - name: Claude sign-in from the macOS Keychain
         run: python3 test/claude-keychain-test.py
 
+      - name: Codex signed out
+        run: python3 test/codex-sign-in-test.py
+
       - name: Install, update and uninstall from git
         run: test/cli-test.sh
 
@@ -122,6 +125,9 @@ jobs:
 
       - name: Claude sign-in from the macOS Keychain
         run: /usr/bin/python3 test/claude-keychain-test.py
+
+      - name: Codex signed out
+        run: /usr/bin/python3 test/codex-sign-in-test.py
 
       - name: Collectors run without any agent data
         run: |

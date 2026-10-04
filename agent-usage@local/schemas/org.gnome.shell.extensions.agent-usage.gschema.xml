@@ -21,12 +21,15 @@
     <key name="agent" type="s">
       <choices>
         <choice value="opencode"/>
+        <choice value="opencode-desktop"/>
         <choice value="claude"/>
+        <choice value="claude-desktop"/>
         <choice value="codex"/>
         <choice value="custom"/>
       </choices>
       <default>"opencode"</default>
       <summary>Agent the "Open" button starts</summary>
+      <description>An agent to run in the terminal, or a desktop app ("opencode-desktop", "claude-desktop").</description>
     </key>
     <key name="agent-command" type="s">
       <default>""</default>
@@ -49,7 +52,7 @@
       </choices>
       <default>"auto"</default>
       <summary>Terminal to open the agent in</summary>
-      <description>"auto" uses the desktop's default terminal.</description>
+      <description>"auto" uses the desktop's default terminal. Signing in and updating use it too, also when the agent is a desktop app.</description>
     </key>
     <key name="terminal-command" type="s">
       <default>""</default>

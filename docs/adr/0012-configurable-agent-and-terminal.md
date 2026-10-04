@@ -56,3 +56,5 @@ panel and the settings window, so *Try it* behaves exactly like the button.
   ([0016](0016-versions-releases-and-update-check.md)).
 - **On macOS, the same settings open Mac terminals**
   ([0020](0020-opening-the-agent-on-macos.md)).
+- **Desktop apps joined the agent list later,** and the sign-in buttons use
+  the terminal choice too ([0023](0023-desktop-apps-and-sign-in-buttons.md)).

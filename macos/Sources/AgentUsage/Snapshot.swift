@@ -20,6 +20,11 @@ enum Snapshot {
         state.selectedID = "codex"
         scenes.append(("panel-codex-problem", state))
 
+        var signIn = PanelState(providers: [samples.claudeSignedOut], selectedID: "claude", now: now)
+        signIn.launchHint = "Open Claude (desktop app)"
+        signIn.launchOpensApp = true
+        scenes.append(("panel-claude-sign-in", signIn))
+
         var stale = PanelState(providers: [samples.claudeStale], selectedID: "claude", now: now)
         stale.hoveredRow = "day-6"
         stale.hoverText = samples.claudeStale.dayDetail(samples.claudeStale.recentDays[6], isToday: true)
@@ -119,6 +124,7 @@ struct MenuBarSamples: View {
 struct Samples {
     let claude: AgentRecord
     let claudeStale: AgentRecord
+    let claudeSignedOut: AgentRecord
     let codex: AgentRecord
 
     init(now: Date) {
@@ -159,6 +165,11 @@ struct Samples {
         fields["limitsFetchedAt"] = at(-37 * 60)
         fields["limitsNote"] = "Anthropic is rate limiting checks · next try 14:02"
         claudeStale = AgentRecord(fields)
+
+        fields["usageStatusText"] = "Sign-in expired"
+        fields["authHelpText"] = "Claude Code's saved sign-in expired — showing the last known limits. Start Claude Code, or run `claude auth login`, to refresh it."
+        fields["limitsNote"] = "Claude Code's saved sign-in expired"
+        claudeSignedOut = AgentRecord(fields)
 
         codex = AgentRecord([
             "id": "codex", "name": "Codex", "tierLabel": "", "usageStatusText": "Codex unavailable",

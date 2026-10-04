@@ -161,7 +161,7 @@ struct SettingsView: View {
             } header: {
                 Text("Open agent")
             } footer: {
-                note("What the panel's terminal button, and right-clicking the menu bar icon, opens. In a custom terminal command, {command} is where the agent goes; without it, the agent goes at the end.")
+                note("What the panel's open button, and right-clicking the menu bar icon, opens: an agent in a terminal, or a desktop app. Signing in and updating use the terminal too. In a custom terminal command, {command} is where the agent goes; without it, the agent goes at the end.")
             }
 
             Section {

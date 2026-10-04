@@ -1,13 +1,33 @@
-// Which agent "Open …" starts, and in which terminal. Shared by the panel
-// and the settings window, so "Try it" behaves exactly like the panel
-// button. Only uses GLib, so the tests run it under plain `gjs -m`.
+// Which agent "Open …" starts, and in which terminal, or which desktop app it
+// opens. Shared by the panel and the settings window, so "Try it" behaves
+// exactly like the panel button. Only uses GLib and Gio, so the tests run it
+// under plain `gjs -m`.
 
+import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
+// An agent has a `command` to run in a terminal, or is a desktop `app`.
 export const AGENTS = [
     {id: 'opencode', name: 'OpenCode', command: 'opencode'},
+    {id: 'opencode-desktop', name: 'OpenCode (desktop app)', app: 'opencode'},
     {id: 'claude', name: 'Claude Code', command: 'claude'},
+    {id: 'claude-desktop', name: 'Claude (desktop app)', app: 'claude'},
     {id: 'codex', name: 'Codex', command: 'codex'},
+];
+
+// Found by their desktop file, then by any desktop file that runs one of
+// their programs, then by the program itself (an AppImage, say).
+export const DESKTOP_APPS = [
+    {
+        id: 'opencode',
+        desktopIds: ['ai.opencode.desktop.desktop', 'opencode-desktop.desktop'],
+        programs: ['ai.opencode.desktop', 'opencode-desktop', '~/Applications/OpenCode.AppImage'],
+    },
+    {
+        id: 'claude',
+        desktopIds: ['claude-desktop.desktop'],
+        programs: ['claude-desktop'],
+    },
 ];
 
 // Each entry turns the agent's argv into the terminal's arguments.
@@ -68,6 +88,29 @@ export function installedTerminals(find = findProgram) {
     return TERMINALS.filter(terminal => find(terminal.program));
 }
 
+// Returns {desktopId} or {argv}, or null when it isn't installed. `apps` are
+// Gio.AppInfo objects; the tests pass fakes.
+export function findDesktopApp(app, apps = Gio.AppInfo.get_all(), find = findProgram) {
+    const ids = apps.map(info => info.get_id());
+    const desktopId = app.desktopIds.find(id => ids.includes(id));
+    if (desktopId)
+        return {desktopId};
+    const names = app.programs.map(program => GLib.path_get_basename(program));
+    const entry = apps.find(info => names.includes(GLib.path_get_basename(info.get_executable() || '')));
+    if (entry?.get_id())
+        return {desktopId: entry.get_id()};
+    for (const program of app.programs) {
+        const path = find(program);
+        if (path)
+            return {argv: [path]};
+    }
+    return null;
+}
+
+export function agentInstalled(agent, find = findProgram, findApp = findDesktopApp) {
+    return agent.app ? findApp(DESKTOP_APPS.find(app => app.id === agent.app)) !== null : find(agent.command) !== null;
+}
+
 function parse(text) {
     const trimmed = String(text || '').trim();
     if (trimmed === '')
@@ -116,11 +159,20 @@ export function launchSettings(settings) {
     };
 }
 
-// Returns {argv, agentName, terminalName}, or {error, reason, agentName}
-// where reason is 'agent' (nothing to open) or 'terminal' (nowhere to open it).
-export function resolveLaunch(prefs, find = findProgram) {
+// Returns {argv, agentName, terminalName} for an agent in a terminal, or
+// {opensApp: true, desktopId or argv, agentName} for a desktop app. Or
+// {error, reason, agentName}, where reason is 'agent' (nothing to open) or
+// 'terminal' (nowhere to open it).
+export function resolveLaunch(prefs, find = findProgram, findApp = findDesktopApp) {
     let agentName;
     let command;
+    const chosen = AGENTS.find(candidate => candidate.id === prefs.agent);
+    if (chosen?.app) {
+        const found = findApp(DESKTOP_APPS.find(app => app.id === chosen.app));
+        if (!found)
+            return {error: `${chosen.name} isn't installed.`, reason: 'agent', agentName: chosen.name};
+        return {...found, opensApp: true, agentName: chosen.name};
+    }
     if (prefs.agent === 'custom') {
         const {words, error} = parse(prefs.agentCommand);
         if (error)
@@ -133,7 +185,7 @@ export function resolveLaunch(prefs, find = findProgram) {
             return {error: `${words[0]} isn't installed.`, reason: 'agent', agentName};
         command = [path, ...words.slice(1)];
     } else {
-        const agent = AGENTS.find(candidate => candidate.id === prefs.agent) ?? AGENTS[0];
+        const agent = chosen ?? AGENTS[0];
         agentName = agent.name;
         const path = find(agent.command);
         if (!path)
@@ -171,6 +223,33 @@ export function terminalArgv(prefs, command, find = findProgram) {
     return {error: chosen ? `${chosen.name} isn't installed.` : 'No terminal found. Pick one in the settings.'};
 }
 
+// The header button's tooltip, or null when there's nothing to open. A
+// missing terminal still gets the button, so clicking it says what's wrong.
+export function buttonHint(launch) {
+    if (launch.reason === 'agent')
+        return null;
+    if (launch.error || launch.opensApp)
+        return `Open ${launch.agentName}`;
+    return `Open ${launch.agentName} in ${launch.terminalName}`;
+}
+
+// A command-line tool in the chosen terminal, such as `claude auth login`
+// from the problem card. `pause` keeps the window open once it's done.
+// Returns {argv, terminalName} or {error}.
+export function commandArgv(prefs, command, {pause = false} = {}, find = findProgram) {
+    const path = find(command[0]);
+    if (!path)
+        return {error: `${command[0]} isn't installed.`};
+    const full = [path, ...command.slice(1)];
+    return terminalArgv(prefs, pause ? withPause(full) : full, find);
+}
+
+// So the last words of a short command (signed in, or why not) can be read
+// before the terminal closes.
+export function withPause(command) {
+    return ['/bin/sh', '-c', '"$@"; status=$?; printf "\\nPress Enter to close this window. "; read -r _; exit $status', 'sh', ...command];
+}
+
 // The command line as a person would type it, for the settings window.
 export function displayCommand(argv) {
     const home = GLib.get_home_dir();
@@ -178,4 +257,13 @@ export function displayCommand(argv) {
         const shown = arg.startsWith(`${home}/`) ? `~${arg.slice(home.length)}` : arg;
         return /^[\w@%+=:,./~-]+$/.test(shown) ? shown : GLib.shell_quote(shown);
     }).join(' ');
+}
+
+// What the settings window's "Try it" row says will happen.
+export function describeLaunch(launch) {
+    if (launch.error)
+        return launch.error;
+    if (launch.desktopId)
+        return `Opens the app from ${launch.desktopId}`;
+    return displayCommand(launch.argv);
 }

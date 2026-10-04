@@ -146,13 +146,13 @@ export default class AgentUsagePreferences extends ExtensionPreferences {
     _launchGroup(settings) {
         const group = new Adw.PreferencesGroup({
             title: 'Open agent',
-            description: 'What the terminal button in the panel, and right-clicking the top-bar icon, opens.',
+            description: "What the panel's open button, and right-clicking the top-bar icon, opens: an agent in a terminal, or a desktop app.",
         });
 
         // Agents: all of them, marked when this machine doesn't have one.
         const agentIds = [...Terminals.AGENTS.map(agent => agent.id), 'custom'];
         const agentLabels = [
-            ...Terminals.AGENTS.map(agent => Terminals.findProgram(agent.command) ? agent.name : `${agent.name} (not installed)`),
+            ...Terminals.AGENTS.map(agent => Terminals.agentInstalled(agent) ? agent.name : `${agent.name} (not installed)`),
             'Custom…',
         ];
         group.add(choiceRow(settings, 'agent', 'Agent', agentIds, agentLabels));
@@ -174,7 +174,9 @@ export default class AgentUsagePreferences extends ExtensionPreferences {
             ...terminals.map(terminal => installed.includes(terminal) ? terminal.name : `${terminal.name} (not installed)`),
             'Custom…',
         ];
-        group.add(choiceRow(settings, 'terminal', 'Terminal', terminalIds, terminalLabels));
+        const terminalRow = choiceRow(settings, 'terminal', 'Terminal', terminalIds, terminalLabels);
+        terminalRow.subtitle = 'Signing in and updating use it too, also with a desktop app.';
+        group.add(terminalRow);
 
         const terminalCommand = new Adw.EntryRow({title: 'Custom terminal command, e.g. ghostty -e {command}', use_markup: false});
         settings.bind('terminal-command', terminalCommand, 'text', Gio.SettingsBindFlags.DEFAULT);
@@ -189,7 +191,7 @@ export default class AgentUsagePreferences extends ExtensionPreferences {
             agentCommand.visible = settings.get_string('agent') === 'custom';
             terminalCommand.visible = settings.get_string('terminal') === 'custom';
             const launch = Terminals.resolveLaunch(Terminals.launchSettings(settings));
-            tryRow.subtitle = launch.error ?? Terminals.displayCommand(launch.argv);
+            tryRow.subtitle = Terminals.describeLaunch(launch);
             tryButton.sensitive = !launch.error;
         };
         settings.connect('changed', update);
@@ -200,6 +202,10 @@ export default class AgentUsagePreferences extends ExtensionPreferences {
             if (launch.error)
                 return;
             try {
+                if (launch.desktopId) {
+                    Gio.AppInfo.get_all().find(info => info.get_id() === launch.desktopId)?.launch([], null);
+                    return;
+                }
                 const launcher = new Gio.SubprocessLauncher({flags: Gio.SubprocessFlags.NONE});
                 launcher.set_cwd(GLib.get_home_dir());
                 launcher.spawnv(launch.argv);

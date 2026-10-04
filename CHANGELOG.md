@@ -3,6 +3,32 @@
 Versions are git tags (`v0.6.0`, …). `agent-usage update` installs the newest
 one.
 
+## 0.8.0
+
+Desktop apps, and signing in again from the panel. On GNOME and on a Mac.
+
+- **Desktop apps:** *Agent* in the settings has two more choices,
+  *OpenCode (desktop app)* and *Claude (desktop app)*. The open button and
+  right-click then open the app, or bring it to the front. The button shows
+  an app icon.
+- **Sign-in buttons:** when the sign-in is the problem, the problem card
+  offers the fix, in your terminal:
+  - **Claude Code** (*Sign-in expired*, *Waiting for auth*):
+    **Start Claude Code**, which refreshes the saved sign-in, or
+    **Sign in** (`claude auth login`).
+  - **Codex** (*Not signed in*): **Sign in** (`codex login`).
+
+  After **Sign in**, the window waits for Enter, so you can read how it
+  went. The panel then checks every 15 seconds until the problem is gone.
+- **Collectors:** two new patches of this project's own.
+  - `claude-sign-in-refused.diff`: when Anthropic refuses the saved
+    sign-in, the panel says *Sign-in expired*, instead of a generic error
+    that cached limits could hide.
+  - `codex-sign-in.diff`: a signed-out Codex says *Not signed in*, instead
+    of nothing.
+- **Settings:** the terminal is also used for signing in and updating, also
+  when the agent is a desktop app. The settings say so now.
+
 ## 0.7.0
 
 The same panel on a Mac, as a native menu bar app (macOS 13 and up, Apple

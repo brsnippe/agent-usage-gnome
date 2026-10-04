@@ -52,6 +52,7 @@ def fake_probe(token):
   return answers.pop(0)
 
 
+real_probe = collector.probe_limits
 collector.probe_limits = fake_probe
 TOKEN, NEVER_EXPIRES = "token", 0
 
@@ -124,6 +125,16 @@ check("other server errors show cached numbers with the reason, without a backof
       (result["limitsStale"], result["limitsNote"], cache_file()["backoffSeconds"]), (True, "Anthropic's usage endpoint returned status 500.", 60))
 check("(the old backoff just ran out)", clock.now > cache_file()["backoffUntilMs"] / 1000, True)
 
+refused = {"ok": False, "helpText": "Anthropic's usage endpoint returned status 401.", "refused": True}
+FIX = " Start Claude Code, or run `claude auth login`, to refresh it."
+clock.now += 61
+answers.append(refused)
+result = run()
+check("a refused sign-in says so, even with cached numbers to show",
+      (result["usageStatusText"], result["limitsStale"], result["limits"], result["authHelpText"]),
+      ("Sign-in expired", True, LIMITS, "Anthropic no longer accepts Claude Code's saved sign-in — showing the last known limits." + FIX))
+check("and starts no backoff", clock.now > cache_file()["backoffUntilMs"] / 1000, True)
+
 # No cached numbers at all: the problem card explains it instead.
 (Path(cache) / "omarchy" / "agent-usage" / "claude-limits.json").unlink()
 clock.now += 60
@@ -132,6 +143,28 @@ result = run()
 check("rate limited with nothing cached shows the problem card",
       (result["limits"], result["usageStatusText"], result["authHelpText"].startswith("Anthropic is rate limiting checks")),
       ([], "Claude limits unavailable", True))
+
+(Path(cache) / "omarchy" / "agent-usage" / "claude-limits.json").unlink()
+answers.append(refused)
+result = run()
+check("a refused sign-in with nothing cached",
+      (result["limits"], result["usageStatusText"], result["authHelpText"]),
+      ([], "Sign-in expired", "Anthropic no longer accepts Claude Code's saved sign-in." + FIX))
+
+
+def refusing(code):
+  def urlopen(request, timeout):
+    raise collector.urllib.error.HTTPError(request.full_url, code, "refused", {}, None)
+  return urlopen
+
+
+real_urlopen = collector.urllib.request.urlopen
+statuses = {}
+for code in (401, 403, 500):
+  collector.urllib.request.urlopen = refusing(code)
+  statuses[code] = real_probe(TOKEN).get("refused")
+collector.urllib.request.urlopen = real_urlopen
+check("401 and 403 count as a refused sign-in, other errors don't", statuses, {401: True, 403: True, 500: False})
 
 check("retry-after parsing", [collector.parse_retry_after(v) for v in ["", "0", "120", "garbage", None]], [0.0, 0.0, 120.0, 0.0, 0.0])
 

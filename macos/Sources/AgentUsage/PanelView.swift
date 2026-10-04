@@ -12,8 +12,10 @@ struct PanelState {
     var hoverText: String?
     var running: UpdateRequest?
     var newRelease: String?
-    /// The terminal button's tooltip; nil hides the button.
+    /// The open button's tooltip; nil hides the button.
     var launchHint: String?
+    /// The open button opens a desktop app rather than a terminal.
+    var launchOpensApp = false
     /// Something that just went wrong, like a terminal that isn't installed.
     var notice: String?
     var pythonMissing = false
@@ -28,6 +30,9 @@ struct PanelActions {
     var openSettings: () -> Void = {}
     var select: (String) -> Void = { _ in }
     var footer: () -> Void = {}
+    /// A problem card's sign-in button, for the agent with this id.
+    var signIn: (String, SignInAction) -> Void = { _, _ in }
+    var signInHint: (SignInAction) -> String = { "Runs \($0.command.joined(separator: " "))" }
 }
 
 final class PanelModel: ObservableObject {
@@ -83,7 +88,7 @@ struct PanelContent: View {
                 }
                 notices
                 if let problem = record.problem {
-                    ProblemCard(text: problem)
+                    RecordProblem(record: record, problem: problem, model: model)
                 }
                 sections(record)
                 Footer(model: model, record: record)
@@ -174,19 +179,82 @@ struct Bar: View {
     }
 }
 
-struct ProblemCard: View {
+/// What's wrong and what to do about it, with buttons when there's a fix to
+/// run.
+struct ProblemCard<Buttons: View>: View {
     var text: String
+    @ViewBuilder var buttons: Buttons
 
     var body: some View {
-        Text(text)
-            .font(Theme.font(8.5))
-            .foregroundColor(Theme.dim)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 10)
-            .padding(.horizontal, 12)
-            .background(Theme.urgent.opacity(0.10))
-            .overlay(Rectangle().strokeBorder(Theme.urgent.opacity(0.35), lineWidth: 1))
+        VStack(alignment: .leading, spacing: 10) {
+            Text(text)
+                .font(Theme.font(8.5))
+                .foregroundColor(Theme.dim)
+                .fixedSize(horizontal: false, vertical: true)
+            buttons
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .background(Theme.urgent.opacity(0.10))
+        .overlay(Rectangle().strokeBorder(Theme.urgent.opacity(0.35), lineWidth: 1))
+    }
+}
+
+extension ProblemCard where Buttons == EmptyView {
+    init(text: String) {
+        self.init(text: text) { EmptyView() }
+    }
+}
+
+/// An agent's problem card, with its sign-in buttons when that's the fix.
+struct RecordProblem: View {
+    var record: AgentRecord
+    var problem: String
+    @ObservedObject var model: PanelModel
+
+    var body: some View {
+        let actions = record.signInActions
+        if actions.isEmpty {
+            ProblemCard(text: problem)
+        } else {
+            ProblemCard(text: problem) {
+                HStack(spacing: 8) {
+                    ForEach(actions, id: \.label) { action in
+                        CardButton(label: action.label, hint: model.actions.signInHint(action), model: model) {
+                            model.actions.signIn(record.id, action)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// A button on a card, framed like the tabs.
+struct CardButton: View {
+    var label: String
+    var hint: String
+    @ObservedObject var model: PanelModel
+    var action: () -> Void
+
+    private var hovered: Bool { model.state.hoveredRow == "card-\(label)" }
+
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .font(Theme.font(8.5))
+                .lineLimit(1)
+                .padding(.vertical, 4)
+                .padding(.horizontal, 10)
+                .foregroundColor(Theme.foreground)
+                .background(hovered ? Theme.foreground.opacity(0.08) : Color.clear)
+                .overlay(Rectangle().strokeBorder(Theme.foreground.opacity(hovered ? 1 : 0.35), lineWidth: 1))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(hint)
+        .onHover { model.hover("card-\(label)", text: hint, inside: $0) }
     }
 }
 
@@ -236,7 +304,7 @@ struct Hero: View {
             Spacer(minLength: 0)
             ActionButton(symbol: "arrow.clockwise", hint: "Refresh now (r)", model: model, action: model.actions.refresh)
             if let hint = model.state.launchHint {
-                ActionButton(symbol: "terminal", hint: hint, model: model, action: model.actions.openAgent)
+                ActionButton(symbol: model.state.launchOpensApp ? "macwindow" : "terminal", hint: hint, model: model, action: model.actions.openAgent)
             }
             ActionButton(symbol: "gearshape", hint: "Settings", model: model, action: model.actions.openSettings)
         }

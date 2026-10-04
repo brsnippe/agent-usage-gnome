@@ -298,6 +298,23 @@ public struct TodayModelRow: Equatable {
     }
 }
 
+/// When the problem is the sign-in, the problem card offers the fix: a
+/// command-line tool to run in the terminal.
+public struct SignInAction: Equatable {
+    public var label: String
+    public var command: [String]
+    /// Keeps the window open afterwards, so the outcome can be read.
+    public var pause: Bool
+
+    static let byAgent: [String: (statuses: [String], actions: [SignInAction])] = [
+        "claude": (["Waiting for auth", "Sign-in expired"], [
+            SignInAction(label: "Start Claude Code", command: ["claude"], pause: false),
+            SignInAction(label: "Sign in", command: ["claude", "auth", "login"], pause: true),
+        ]),
+        "codex": (["Not signed in"], [SignInAction(label: "Sign in", command: ["codex", "login"], pause: true)]),
+    ]
+}
+
 /// One agent's record, as a collector wrote it.
 public struct AgentRecord: Equatable {
     public var fields: [String: JSONValue]
@@ -416,6 +433,14 @@ public struct AgentRecord: Equatable {
     public var problem: String? {
         let help = JS.text(fields["authHelpText"])
         return JS.text(fields["usageStatusText"]).isEmpty || help.isEmpty ? nil : help
+    }
+
+    /// The problem card's buttons, when the problem is the sign-in.
+    public var signInActions: [SignInAction] {
+        guard let known = SignInAction.byAgent[id], known.statuses.contains(JS.text(fields["usageStatusText"])) else {
+            return []
+        }
+        return known.actions
     }
 
     public var retryAdvised: Bool { fields["retryAdvised"] == .bool(true) }

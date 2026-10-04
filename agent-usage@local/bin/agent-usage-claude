@@ -838,7 +838,7 @@ def probe_limits(access_token: str) -> dict[str, Any]:
       ) + ". Local Claude Code stats are still shown."
       return {"ok": False, "helpText": help_text, "rateLimited": True, "retryAfter": parse_retry_after(retry_after)}
     help_text = f"Anthropic's usage endpoint returned status {error.code}. Local Claude Code stats are still shown."
-    return {"ok": False, "helpText": help_text}
+    return {"ok": False, "helpText": help_text, "refused": error.code in (401, 403)}
   except Exception:
     # A transport failure reached no server at all — no route, no DNS. Any
     # real answer, including an error status, is a server we should stop
@@ -979,6 +979,18 @@ def collect_limits(access_token: str, expires_at_ms: int, force: bool) -> dict[s
     result["limitsFetchedAt"] = iso_from_ms(now_ms)
     # A clean answer ends any backoff: the cache keeps only the new reading.
     write_json(probe_cache, {"fetchedAtMs": now_ms, "limits": probe["limits"]})
+    return result
+
+  # A token Anthropic no longer accepts (revoked, or replaced by a sign-in
+  # elsewhere) needs the same fix as an expired one.
+  if probe.get("refused"):
+    use_cached(result, fallback, cached, "Anthropic refused Claude Code's saved sign-in")
+    result["usageStatusText"] = "Sign-in expired"
+    result["authHelpText"] = (
+      "Anthropic no longer accepts Claude Code's saved sign-in"
+      + (" — showing the last known limits." if fallback else ".")
+      + " Start Claude Code, or run `claude auth login`, to refresh it."
+    )
     return result
 
   note = probe["helpText"]

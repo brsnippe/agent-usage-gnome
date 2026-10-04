@@ -10,8 +10,9 @@ which keeps improving them. This project needs some changes on top of them:
 
 - the two upstream fixes ([0004](0004-count-opencode-v2-usage.md));
 - changes of its own: the rate-limit back-off
-  ([0008](0008-rate-limit-back-off-and-stale-limits.md)), and reading Claude
-  Code's login from the macOS Keychain for the macOS app.
+  ([0008](0008-rate-limit-back-off-and-stale-limits.md)), reading Claude
+  Code's login from the macOS Keychain for the macOS app, and saying when
+  the sign-in is the problem ([0023](0023-desktop-apps-and-sign-in-buttons.md)).
 
 ## Decision
 
@@ -26,6 +27,8 @@ which keeps improving them. This project needs some changes on top of them:
   | `pr-7686-codex-opencode-v2.diff` | Codex | upstream PR |
   | `claude-limits-backoff.diff` | Claude | this project, applies after #13894 |
   | `claude-macos-keychain.diff` | Claude | this project, applies after the back-off |
+  | `claude-sign-in-refused.diff` | Claude | this project, applies after the Keychain patch ([0023](0023-desktop-apps-and-sign-in-buttons.md)) |
+  | `codex-sign-in.diff` | Codex | this project, applies after #7686 ([0023](0023-desktop-apps-and-sign-in-buttons.md)) |
 
 - **Checking it:** when a collector changes, rebuild it from Omarchy 4.0.4
   plus the patches and compare it to the bundled file with `cmp`.
@@ -40,7 +43,9 @@ which keeps improving them. This project needs some changes on top of them:
 ## Consequences
 
 - **The README** explains how to switch once the PRs are merged. Take
-  Omarchy's Codex collector as is. Take Omarchy's Claude collector and
-  reapply `claude-limits-backoff.diff`, then `claude-macos-keychain.diff`.
-- **Tests:** `test/claude-limits-test.py` and `test/claude-keychain-test.py`
-  exercise the own patches.
+  Omarchy's Codex collector and reapply `codex-sign-in.diff`. Take Omarchy's
+  Claude collector and reapply `claude-limits-backoff.diff`,
+  `claude-macos-keychain.diff` and `claude-sign-in-refused.diff`, in that
+  order.
+- **Tests:** `test/claude-limits-test.py`, `test/claude-keychain-test.py`
+  and `test/codex-sign-in-test.py` exercise the own patches.

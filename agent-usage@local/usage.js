@@ -236,6 +236,30 @@ export function heroMeta(record) {
     return tier === '' ? 'Subscription' : tier.charAt(0).toUpperCase() + tier.slice(1);
 }
 
+// When the problem is the sign-in, the problem card offers the fix: a
+// command-line tool to run in the terminal. `pause` keeps the window open
+// afterwards, so the outcome can be read.
+const SIGN_IN = {
+    claude: {
+        statuses: ['Waiting for auth', 'Sign-in expired'],
+        actions: [
+            {label: 'Start Claude Code', command: ['claude'], pause: false},
+            {label: 'Sign in', command: ['claude', 'auth', 'login'], pause: true},
+        ],
+    },
+    codex: {
+        statuses: ['Not signed in'],
+        actions: [{label: 'Sign in', command: ['codex', 'login'], pause: true}],
+    },
+};
+
+export function signInActions(record) {
+    const known = SIGN_IN[String(record?.id || '')];
+    if (!known || !known.statuses.includes(String(record?.usageStatusText || '')))
+        return [];
+    return known.actions;
+}
+
 export function recentDays(record) {
     return (record?.recentDays ?? []).filter(day => day && typeof day === 'object');
 }

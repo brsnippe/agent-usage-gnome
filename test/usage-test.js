@@ -55,6 +55,14 @@ check('balance alarm at 10% left', [
     Usage.isAlarming({balance: {remaining: 20, funded: 50}}),
 ], [true, false]);
 check('hero meta', [Usage.heroMeta(claude), Usage.heroMeta(codex), Usage.heroMeta({})], ['Max 5x', 'Codex unavailable', 'Subscription']);
+check('sign-in problems offer the fix', [
+    Usage.signInActions({id: 'claude', usageStatusText: 'Sign-in expired'}).map(action => action.label),
+    Usage.signInActions({id: 'claude', usageStatusText: 'Waiting for auth'}).map(action => [action.command.join(' '), action.pause]),
+    Usage.signInActions({id: 'codex', usageStatusText: 'Not signed in'}).map(action => [action.label, action.command.join(' ')]),
+], [['Start Claude Code', 'Sign in'], [['claude', false], ['claude auth login', true]], [['Sign in', 'codex login']]]);
+check('other problems offer none', [
+    claude, codex, {id: 'claude', usageStatusText: 'Claude limits unavailable'}, {id: 'fireworks', usageStatusText: 'Not signed in'}, undefined,
+].map(record => Usage.signInActions(record).length), [0, 0, 0, 0, 0]);
 check('model rows sorted by total', Usage.modelRows(claude).map(r => [r.name, r.total]), [['Opus 5.5', 5353410], ['Sonnet 4.5', 10]]);
 check('model detail', Usage.modelDetail(Usage.modelRows(claude)[0]), 'Opus 5.5 · in 168 · out 50.6K · cache 5.0M/289.4K');
 check('day detail for today has prompts', Usage.dayDetail(claude.recentDays[1], true, claude).replace(/^\w+ \d+\/\d+/, 'DAY'),

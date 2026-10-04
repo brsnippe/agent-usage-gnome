@@ -26,6 +26,8 @@ final class AppModel {
     private var timers: [Timer] = []
     private var retryTimer: Timer?
     private var releaseTimer: Timer?
+    private var signInTimer: Timer?
+    private var signInChecksLeft = 0
     private var observers: [(NotificationCenter, NSObjectProtocol)] = []
     private var appliedSettings: [String] = []
     /// GNOME switches extensions off while the screen is locked; here the
@@ -38,6 +40,10 @@ final class AppModel {
     /// New releases: once a day, starting a minute after launch.
     static let releaseCheckSeconds: TimeInterval = 24 * 3600
     static let firstReleaseCheckSeconds: TimeInterval = 60
+    /// After a sign-in button: check that agent's limits this often, this
+    /// many times, until the problem is gone.
+    static let signInCheckSeconds: TimeInterval = 15
+    static let signInChecks = 20
 
     init() {
         let base = ProcessInfo.processInfo.environment
@@ -53,7 +59,9 @@ final class AppModel {
             openAgent: { [weak self] in self?.launchAgent() },
             openSettings: { [weak self] in self?.onOpenSettings?() },
             select: { [weak self] in self?.select($0) },
-            footer: { [weak self] in self?.onOpenSettings?() }
+            footer: { [weak self] in self?.onOpenSettings?() },
+            signIn: { [weak self] in self?.signIn($0, $1) },
+            signInHint: { [weak self] in self?.signInHint($0) ?? "" }
         )
         Log.write("started \(AppInfo.version): python \(python ?? "missing"), collectors \(collectors.map(\.agent)), records in \(usageDir)")
     }
@@ -288,16 +296,19 @@ final class AppModel {
 
     var machine: Machine {
         let home = self.home
-        return Machine.local(findApp: { terminal in
-            NSWorkspace.shared.urlForApplication(withBundleIdentifier: terminal.bundleID)?.path
-                ?? Terminals.findAppInFolders(terminal, home: home)
+        return Machine.local(findApp: { app in
+            NSWorkspace.shared.urlForApplication(withBundleIdentifier: app.bundleID)?.path
+                ?? Terminals.findAppInFolders(app, home: home)
         })
     }
 
     private func refreshLaunchHint() {
-        let hint = Terminals.buttonHint(Terminals.resolveLaunch(Settings.launchPrefs, on: machine))
-        if panel.state.launchHint != hint {
+        let launch = Terminals.resolveLaunch(Settings.launchPrefs, on: machine)
+        let hint = Terminals.buttonHint(launch)
+        let opensApp = (try? launch.get())?.opensApp ?? false
+        if panel.state.launchHint != hint || panel.state.launchOpensApp != opensApp {
             panel.state.launchHint = hint
+            panel.state.launchOpensApp = opensApp
         }
     }
 
@@ -318,6 +329,57 @@ final class AppModel {
         Log.write(notice)
         panel.state.notice = notice
         onNotice?()
+    }
+
+    // ------------------------------------------------------------ sign-in
+
+    private func signInLaunch(_ action: SignInAction) -> Result<TerminalLaunch, LaunchError> {
+        Terminals.commandLaunch(Settings.launchPrefs, command: action.command, pause: action.pause, on: machine)
+    }
+
+    func signInHint(_ action: SignInAction) -> String {
+        switch signInLaunch(action) {
+        case .success(let terminal): return "Runs \(action.command.joined(separator: " ")) in \(terminal.terminalName)"
+        case .failure(let error): return error.message
+        }
+    }
+
+    /// The problem card's buttons: a command-line tool in the chosen terminal.
+    func signIn(_ id: String, _ action: SignInAction) {
+        let name = action.command.joined(separator: " ")
+        switch signInLaunch(action) {
+        case .success(let terminal):
+            do {
+                try Launcher.run(argv: terminal.argv, script: terminal.script, name: name)
+                followSignIn(id)
+            } catch {
+                show("Couldn't start \(name): \(error.localizedDescription)")
+            }
+        case .failure(let error):
+            show(error.message)
+        }
+    }
+
+    /// Signing in happens in a browser or another window; keep checking that
+    /// agent's limits until the problem is gone, so the panel catches up on
+    /// its own.
+    private func followSignIn(_ id: String) {
+        signInTimer?.invalidate()
+        signInChecksLeft = Self.signInChecks
+        signInTimer = Timer.scheduledTimer(withTimeInterval: Self.signInCheckSeconds, repeats: true) { [weak self] _ in
+            self?.checkSignIn(id)
+        }
+    }
+
+    private func checkSignIn(_ id: String) {
+        let signedOut = records.first { $0.id == id }?.signInActions.isEmpty == false
+        guard signInChecksLeft > 0, signedOut else {
+            signInTimer?.invalidate()
+            signInTimer = nil
+            return
+        }
+        signInChecksLeft -= 1
+        runUpdate(.limits, agents: [id])
     }
 }
 

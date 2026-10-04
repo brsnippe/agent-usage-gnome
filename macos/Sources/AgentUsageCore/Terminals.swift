@@ -1,16 +1,38 @@
 import Foundation
 
-// Which agent "Open …" starts, and in which terminal: the macOS counterpart of
-// the GNOME extension's terminals.js. Shared by the panel and the settings
-// window, so "Open" in the settings behaves exactly like the panel button.
+// Which agent "Open …" starts, and in which terminal, or which desktop app it
+// opens: the macOS counterpart of the GNOME extension's terminals.js. Shared
+// by the panel and the settings window, so "Open" in the settings behaves
+// exactly like the panel button.
 
+/// An app found by its bundle id, or by its folder name in the usual places.
+public protocol AppBundle {
+    var bundleID: String { get }
+    /// The bundle's folder name, for finding it without a bundle id lookup.
+    var appName: String { get }
+}
+
+public struct DesktopApp: AppBundle, Equatable {
+    public var bundleID: String
+    public var appName: String
+}
+
+/// An agent has a command to run in a terminal, or is a desktop app.
 public struct AgentChoice: Equatable {
     public var id: String
     public var name: String
-    public var command: String
+    public var command: String?
+    public var app: DesktopApp?
+
+    public init(id: String, name: String, command: String? = nil, app: DesktopApp? = nil) {
+        self.id = id
+        self.name = name
+        self.command = command
+        self.app = app
+    }
 }
 
-public struct TerminalApp: Equatable {
+public struct TerminalApp: AppBundle, Equatable {
     public enum Style: Equatable {
         /// Opens a `.command` script, the way Finder does: no permission to
         /// script the terminal needed, and the user's own shell runs it.
@@ -22,7 +44,6 @@ public struct TerminalApp: Equatable {
     public var id: String
     public var name: String
     public var bundleID: String
-    /// The bundle's folder name, for finding it without a bundle id lookup.
     public var appName: String
     public var style: Style
 }
@@ -34,7 +55,7 @@ public struct Choice: Equatable, Hashable {
 }
 
 public struct LaunchPrefs: Equatable {
-    /// `opencode`, `claude`, `codex` or `custom`.
+    /// An agent's id (`opencode`, `claude-desktop`, …) or `custom`.
     public var agent: String
     public var agentCommand: String
     /// `auto`, a terminal's id, or `custom`.
@@ -52,13 +73,13 @@ public struct LaunchPrefs: Equatable {
 /// What a launch needs to know about this Mac. The tests pass a fake one.
 public struct Machine {
     public var findProgram: (String) -> String?
-    public var findApp: (TerminalApp) -> String?
+    public var findApp: (any AppBundle) -> String?
     /// The user's login shell, which starts the agent so it gets the PATH the
     /// user has in a terminal.
     public var shell: String
     public var home: String
 
-    public init(findProgram: @escaping (String) -> String?, findApp: @escaping (TerminalApp) -> String?, shell: String, home: String) {
+    public init(findProgram: @escaping (String) -> String?, findApp: @escaping (any AppBundle) -> String?, shell: String, home: String) {
         self.findProgram = findProgram
         self.findApp = findApp
         self.shell = shell
@@ -67,7 +88,7 @@ public struct Machine {
 
     public static func local(
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        findApp: ((TerminalApp) -> String?)? = nil
+        findApp: ((any AppBundle) -> String?)? = nil
     ) -> Machine {
         let home = environment["HOME"].flatMap { $0.isEmpty ? nil : $0 } ?? NSHomeDirectory()
         let dirs = Programs.searchDirs(path: environment["PATH"] ?? "", home: home)
@@ -90,6 +111,8 @@ public struct Launch: Equatable {
     public var command: [String]
     public var agentName: String
     public var terminalName: String
+    /// A desktop app rather than an agent in a terminal.
+    public var opensApp = false
 
     /// The command line as a person would type it, for the settings window.
     public func display(home: String) -> String {
@@ -121,7 +144,10 @@ public struct TerminalLaunch: Equatable {
 public enum Terminals {
     public static let agents = [
         AgentChoice(id: "opencode", name: "OpenCode", command: "opencode"),
+        AgentChoice(id: "opencode-desktop", name: "OpenCode (desktop app)", app: DesktopApp(bundleID: "ai.opencode.desktop", appName: "OpenCode.app")),
         AgentChoice(id: "claude", name: "Claude Code", command: "claude"),
+        AgentChoice(id: "claude-desktop", name: "Claude (desktop app)",
+                    app: DesktopApp(bundleID: "com.anthropic.claudefordesktop", appName: "Claude.app")),
         AgentChoice(id: "codex", name: "Codex", command: "codex"),
     ]
 
@@ -146,8 +172,15 @@ public enum Terminals {
     /// The settings window's agents: all of them, marked when this Mac
     /// doesn't have one.
     public static func agentChoices(on machine: Machine) -> [Choice] {
-        agents.map { Choice(id: $0.id, label: machine.findProgram($0.command) == nil ? "\($0.name) (not installed)" : $0.name) }
+        agents.map { Choice(id: $0.id, label: isInstalled($0, on: machine) ? $0.name : "\($0.name) (not installed)") }
             + [Choice(id: "custom", label: "Custom…")]
+    }
+
+    public static func isInstalled(_ agent: AgentChoice, on machine: Machine) -> Bool {
+        if let app = agent.app {
+            return machine.findApp(app) != nil
+        }
+        return agent.command.flatMap(machine.findProgram) != nil
     }
 
     /// The settings window's terminals: the installed ones, plus the current
@@ -160,10 +193,10 @@ public enum Terminals {
             + [Choice(id: "custom", label: "Custom…")]
     }
 
-    public static func findAppInFolders(_ terminal: TerminalApp, home: String) -> String? {
+    public static func findAppInFolders(_ app: any AppBundle, home: String) -> String? {
         let folders = ["/Applications", "/System/Applications/Utilities", "/System/Applications", "\(home)/Applications"]
         var isFolder: ObjCBool = false
-        return folders.map { "\($0)/\(terminal.appName)" }.first {
+        return folders.map { "\($0)/\(app.appName)" }.first {
             FileManager.default.fileExists(atPath: $0, isDirectory: &isFolder) && isFolder.boolValue
         }
     }
@@ -171,6 +204,14 @@ public enum Terminals {
     public static func resolveLaunch(_ prefs: LaunchPrefs, on machine: Machine) -> Result<Launch, LaunchError> {
         let agentName: String
         let command: [String]
+        let chosen = agents.first { $0.id == prefs.agent }
+        if let chosen, let app = chosen.app {
+            // `open -a` brings the app forward when it's already open.
+            guard let path = machine.findApp(app) else {
+                return .failure(LaunchError(message: "\(chosen.name) isn't installed.", reason: .agent, agentName: chosen.name))
+            }
+            return .success(Launch(argv: [open, "-a", path], script: nil, command: [], agentName: chosen.name, terminalName: "", opensApp: true))
+        }
         if prefs.agent == "custom" {
             let words: [String]
             do {
@@ -187,10 +228,11 @@ public enum Terminals {
             }
             command = [path] + words.dropFirst()
         } else {
-            let agent = agents.first { $0.id == prefs.agent } ?? agents[0]
+            let agent = chosen ?? agents[0]
+            let program = agent.command ?? agent.id
             agentName = agent.name
-            guard let path = machine.findProgram(agent.command) else {
-                return .failure(LaunchError(message: "\(agent.name) isn't installed (no \(agent.command) found).", reason: .agent, agentName: agentName))
+            guard let path = machine.findProgram(program) else {
+                return .failure(LaunchError(message: "\(agent.name) isn't installed (no \(program) found).", reason: .agent, agentName: agentName))
             }
             command = [path]
         }
@@ -246,9 +288,26 @@ public enum Terminals {
     /// missing terminal still gets the button, so clicking it says what's wrong.
     public static func buttonHint(_ launch: Result<Launch, LaunchError>) -> String? {
         switch launch {
-        case .success(let launch): return "Open \(launch.agentName) in \(launch.terminalName)"
+        case .success(let launch): return launch.opensApp ? "Open \(launch.agentName)" : "Open \(launch.agentName) in \(launch.terminalName)"
         case .failure(let error): return error.reason == .agent ? nil : "Open \(error.agentName)"
         }
+    }
+
+    /// A command-line tool in the chosen terminal, such as `claude auth login`
+    /// from the problem card. `pause` keeps the window open once it's done.
+    public static func commandLaunch(_ prefs: LaunchPrefs, command: [String], pause: Bool = false, on machine: Machine) -> Result<TerminalLaunch, LaunchError> {
+        let name = command.first ?? ""
+        guard let path = machine.findProgram(name) else {
+            return .failure(LaunchError(message: "\(name) isn't installed.", reason: .agent, agentName: ""))
+        }
+        let full = [path] + command.dropFirst()
+        return terminalLaunch(prefs, command: pause ? withPause(full) : full, on: machine)
+    }
+
+    /// So the last words of a short command (signed in, or why not) can be
+    /// read before the terminal closes.
+    public static func withPause(_ command: [String]) -> [String] {
+        ["/bin/sh", "-c", #""$@"; status=$?; printf "\nPress Enter to close this window. "; read -r _; exit $status"#, "sh"] + command
     }
 
     /// A custom terminal command. `{command}` on its own becomes the command's

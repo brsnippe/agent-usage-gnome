@@ -13,7 +13,8 @@ On a Mac it's the same panel under a menu bar icon: see [macOS](#macos).
     and ⚙ settings buttons.
   - **Tabs:** one per agent, if you have more than one.
   - **Problem card:** shows up when something needs fixing (sign-in,
-    missing CLI).
+    missing CLI). When the sign-in is the problem, its buttons fix it: see
+    [Signing in again](#signing-in-again).
   - **Sections:**
     - **Limits** and **Tokens by day.**
     - **Today by model:** today's tokens per model, with each model's share of
@@ -25,7 +26,7 @@ On a Mac it's the same panel under a menu bar icon: see [macOS](#macos).
     bottom line. On a small screen the panel scrolls rather than running off
     the bottom.
 - **Mouse:** left-click opens the panel, middle-click refreshes, right-click
-  opens your agent (OpenCode by default) in a terminal.
+  opens your agent (OpenCode by default) in a terminal, or a desktop app.
 - **Keyboard (panel open):** ←/→ (or h/l) switches agent, `r` refreshes,
   Esc closes.
 
@@ -81,6 +82,8 @@ xattr -dr com.apple.quarantine "Agent Usage.app"
   Ghostty, Kitty, Alacritty or WezTerm, or write a custom command such as
   `open -na Ghostty --args -e {command}`. The agent starts in your login
   shell, so it finds the same tools as in a terminal window.
+- **Desktop apps:** *Claude (desktop app)* opens `Claude.app`, and
+  *OpenCode (desktop app)* opens `OpenCode.app`, with `open -a`.
 - **Updates:** the panel checks GitHub once a day. *vX.Y.Z available* in its
   bottom line opens the settings, where **Update** installs the new version
   and restarts the app. Nothing needs reloading.
@@ -136,15 +139,22 @@ away.
 
 ## Opening your agent
 
-The panel's terminal button, and right-clicking the top-bar icon, open an
-agent in a terminal. Both are set in the same settings window, under *Open
-agent*:
+The panel's open button, and right-clicking the top-bar icon, open an agent
+in a terminal, or a desktop app. Both are set in the same settings window,
+under *Open agent*:
 
-- **Agent:** OpenCode (the default), Claude Code, Codex, or *Custom…*.
-  Custom takes any command, e.g. `claude --continue`. Agents that aren't
-  installed are marked.
+- **Agent:**
+  - **In a terminal:** OpenCode (the default), Claude Code, Codex, or
+    *Custom…*. Custom takes any command, e.g. `claude --continue`.
+  - **Desktop apps:** *OpenCode (desktop app)* and *Claude (desktop app)*.
+    The button then shows an app icon, and an app that's already open comes
+    to the front. Claude's desktop app is in beta on Linux, for Ubuntu and
+    Debian.
+
+  Agents that aren't installed are marked.
 - **Terminal:** *Automatic* (the default) uses the desktop's default
-  terminal, which is GNOME Terminal on stock Ubuntu. Or pick one of the
+  terminal, which is GNOME Terminal on stock Ubuntu. Signing in and updating
+  use it too, also when the agent is a desktop app. Or pick one of the
   installed terminals:
 
   | Terminal | Started as |
@@ -171,7 +181,34 @@ The terminals and agents are looked up on your PATH, plus `~/.local/bin`,
 shims and `/snap/bin`. If the terminal you picked goes missing, you get a
 notification saying so, rather than a different terminal opening.
 
+The desktop apps are found by their desktop file
+(`ai.opencode.desktop.desktop`, `claude-desktop.desktop`), or by any desktop
+file that runs `ai.opencode.desktop` or `claude-desktop`. An OpenCode
+AppImage at `~/Applications/OpenCode.AppImage` works too.
+
 Made for GNOME 46 (Ubuntu 24.04) and up.
+
+## Signing in again
+
+Claude Code's saved sign-in runs out when Claude Code hasn't run for a
+while, and a sign-in elsewhere can replace it. The panel then says *Sign-in
+expired*, or *Waiting for auth* when there's none at all. Codex says *Not
+signed in*. The problem card offers the fix:
+
+| Agent | Button | Runs |
+|---|---|---|
+| Claude Code | **Start Claude Code** | `claude`, which refreshes the saved sign-in by itself |
+| Claude Code | **Sign in** | `claude auth login` |
+| Codex | **Sign in** | `codex login` |
+
+- **Where:** in the terminal from the settings, even when *Agent* is a
+  desktop app. The desktop apps keep their own sign-in, which the panel
+  doesn't read.
+- **Reading the outcome:** after **Sign in**, the window waits for Enter
+  before it closes.
+- **Afterwards:** the panel checks that agent's limits every 15 seconds,
+  for up to 5 minutes, until the problem is gone. There's no need to
+  refresh by hand.
 
 ## Install
 
@@ -260,6 +297,9 @@ claude auth login   # Claude Code limits
 codex login         # Codex limits (needs the Codex CLI installed)
 ```
 
+Later on, the panel's problem card has buttons for that
+([Signing in again](#signing-in-again)).
+
 ## When something looks wrong
 
 Run `agent-usage diagnose` (or `./diagnose.sh`) and paste its output. It shows the GNOME version, whether
@@ -279,7 +319,7 @@ The extension lives in `agent-usage@local/`:
 | `bin/agent-usage-codex` | Codex limits (`codex app-server`) and token stats. The stats come from Codex sessions plus OpenCode sessions on the `openai` provider |
 | `bin/agent-usage-update` | Runs the collectors and writes one JSON file per agent to `~/.local/state/omarchy/agents/usage/`. It's also on your PATH, so `agent-usage-update --force` collects again by hand |
 | `extension.js`, `usage.js`, `updates.js`, `stylesheet.css` | The top-bar button and panel. They schedule the updater and display those JSON files |
-| `terminals.js` | Which agent to open and how to start each terminal. The panel and the settings window both use it |
+| `terminals.js` | Which agent or desktop app to open, how to start each terminal, and the sign-in commands. The panel and the settings window both use it |
 | `versions.js` | Compares release versions for the update notice |
 | `prefs.js`, `schemas/` | The settings window and its settings: the refresh intervals, the agent, the terminal and update checks |
 
@@ -322,8 +362,8 @@ Both are in `patches/`:
 | `agent-usage-claude` | [#13894](https://github.com/omacom/omarchy/pull/13894): Count Claude usage from opencode v2 sessions | `db4daae` |
 | `agent-usage-codex` | [#7686](https://github.com/omacom/omarchy/pull/7686): Include OpenCode v2 sessions, and only count the last 30 days of OpenCode usage | `48a7927` |
 
-The Claude collector has two more changes of its own on top of that, which
-aren't from upstream:
+On top of that, both collectors have changes of their own, which aren't
+from upstream:
 
 - `patches/claude-limits-backoff.diff` adds the rate-limit back-off and the
   stale marking described under [Refreshing](#refreshing).
@@ -331,22 +371,32 @@ aren't from upstream:
   Claude Code keeps its login in the Keychain rather than in
   `~/.claude/.credentials.json`, so this reads it from there. On Linux it
   changes nothing.
+- `patches/claude-sign-in-refused.diff`: when Anthropic refuses the saved
+  sign-in (401 or 403), the record says *Sign-in expired*, so the problem
+  card offers the fix. Before, this was a generic error, hidden whenever
+  there were cached limits to show.
+- `patches/codex-sign-in.diff`: when Codex isn't signed in, the record says
+  *Not signed in*. Before, it said nothing at all.
 
 When those PRs are merged:
 
-- **Codex:** switch to the official collector:
+- **Codex:** take the official collector **and reapply**
+  `codex-sign-in.diff`:
   ```bash
   cd ~/.local/share/gnome-shell/extensions/agent-usage@local/bin
   curl -fsSL https://raw.githubusercontent.com/omacom/omarchy/master/bin/omarchy-agent-usage-codex -o agent-usage-codex
+  patch agent-usage-codex < /path/to/agent-usage/patches/codex-sign-in.diff
   chmod +x agent-usage-codex
   ```
 - **Claude:** take the official collector **and reapply**
-  `claude-limits-backoff.diff`, then `claude-macos-keychain.diff`. Without
-  them, the back-off, the stale marking and the Mac sign-in are gone:
+  `claude-limits-backoff.diff`, `claude-macos-keychain.diff` and
+  `claude-sign-in-refused.diff`, in that order. Without them, the back-off,
+  the stale marking, the Mac sign-in and the refused sign-in are gone:
   ```bash
   curl -fsSL https://raw.githubusercontent.com/omacom/omarchy/master/bin/omarchy-agent-usage-claude -o agent-usage-claude
   patch agent-usage-claude < /path/to/agent-usage/patches/claude-limits-backoff.diff
   patch agent-usage-claude < /path/to/agent-usage/patches/claude-macos-keychain.diff
+  patch agent-usage-claude < /path/to/agent-usage/patches/claude-sign-in-refused.diff
   chmod +x agent-usage-claude
   ```
 
@@ -375,8 +425,9 @@ Tests, all without GNOME:
 
 ```bash
 for t in test/*-test.js; do gjs -m "$t"; done   # panel logic
-python3 test/claude-limits-test.py              # Claude limits back-off
+python3 test/claude-limits-test.py              # Claude limits back-off, refused sign-in
 python3 test/claude-keychain-test.py            # Claude sign-in from the macOS Keychain
+python3 test/codex-sign-in-test.py              # Codex signed out, with a fake app server
 test/cli-test.sh                                # install, update, uninstall from git
 (cd macos && swift test)                        # the macOS app's logic, on Linux too
 ```

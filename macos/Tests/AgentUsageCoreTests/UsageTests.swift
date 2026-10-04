@@ -91,6 +91,18 @@ final class UsageTests: XCTestCase {
         XCTAssertEqual([claude.problem, codex.problem], [nil, "codex not found in PATH"], "the problem card needs a status and help")
     }
 
+    func testSignInActions() {
+        func actions(_ id: String, _ status: String) -> [SignInAction] {
+            AgentRecord(["id": .string(id), "usageStatusText": .string(status)]).signInActions
+        }
+        XCTAssertEqual(actions("claude", "Sign-in expired").map(\.label), ["Start Claude Code", "Sign in"], "sign-in problems offer the fix")
+        XCTAssertEqual(actions("claude", "Waiting for auth").map(\.command), [["claude"], ["claude", "auth", "login"]])
+        XCTAssertEqual(actions("claude", "Waiting for auth").map(\.pause), [false, true])
+        XCTAssertEqual(actions("codex", "Not signed in"), [SignInAction(label: "Sign in", command: ["codex", "login"], pause: true)])
+        XCTAssertEqual([claude.signInActions.count, codex.signInActions.count, actions("claude", "Claude limits unavailable").count,
+                        actions("fireworks", "Not signed in").count], [0, 0, 0, 0], "other problems offer none")
+    }
+
     func testBalance() {
         let balance = AgentRecord(["balance": ["remaining": 12.5, "funded": 50, "spent": 37.5, "currency": "usd", "estimated": true]]).balance
         XCTAssertEqual(balance?.detail, "$37.50 spent of $50.00 funded · estimated")

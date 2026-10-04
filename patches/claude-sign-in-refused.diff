@@ -1,0 +1,35 @@
+Not from upstream: when Anthropic's usage endpoint refuses Claude Code's
+saved sign-in (401 or 403), say "Sign-in expired" with the fix, as for an
+expired one, instead of a generic error that hides behind cached limits.
+Applies on top of claude-macos-keychain.diff.
+
+--- a/bin/omarchy-agent-usage-claude
++++ b/bin/omarchy-agent-usage-claude
+@@ -838,7 +838,7 @@
+       ) + ". Local Claude Code stats are still shown."
+       return {"ok": False, "helpText": help_text, "rateLimited": True, "retryAfter": parse_retry_after(retry_after)}
+     help_text = f"Anthropic's usage endpoint returned status {error.code}. Local Claude Code stats are still shown."
+-    return {"ok": False, "helpText": help_text}
++    return {"ok": False, "helpText": help_text, "refused": error.code in (401, 403)}
+   except Exception:
+     # A transport failure reached no server at all — no route, no DNS. Any
+     # real answer, including an error status, is a server we should stop
+@@ -981,6 +981,18 @@
+     write_json(probe_cache, {"fetchedAtMs": now_ms, "limits": probe["limits"]})
+     return result
+ 
++  # A token Anthropic no longer accepts (revoked, or replaced by a sign-in
++  # elsewhere) needs the same fix as an expired one.
++  if probe.get("refused"):
++    use_cached(result, fallback, cached, "Anthropic refused Claude Code's saved sign-in")
++    result["usageStatusText"] = "Sign-in expired"
++    result["authHelpText"] = (
++      "Anthropic no longer accepts Claude Code's saved sign-in"
++      + (" — showing the last known limits." if fallback else ".")
++      + " Start Claude Code, or run `claude auth login`, to refresh it."
++    )
++    return result
++
+   note = probe["helpText"]
+   if probe.get("rateLimited"):
+     wait = min(BACKOFF_MAX_SECONDS, max(BACKOFF_MIN_SECONDS, number(cached.get("backoffSeconds")) * 2, probe.get("retryAfter") or 0))

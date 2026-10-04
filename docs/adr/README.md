@@ -75,6 +75,7 @@ It was built iteratively with an AI coding agent: Claude Opus 5.5, running in
 | [0020](0020-opening-the-agent-on-macos.md) | Opening the agent on macOS | Accepted |
 | [0021](0021-install-on-macos-from-the-release-zip.md) | Install on macOS from the release zip | Accepted |
 | [0022](0022-testing-the-macos-app.md) | Test the macOS app without a Mac | Accepted |
+| [0023](0023-desktop-apps-and-sign-in-buttons.md) | Desktop apps as agents, and sign-in buttons in the problem card | Accepted |
 
 ## Open items
 
@@ -100,6 +101,9 @@ It was built iteratively with an AI coding agent: Claude Opus 5.5, running in
   - start at login with an ad-hoc signed app
     ([0021](0021-install-on-macos-from-the-release-zip.md));
   - the panel window's behaviour.
+- **The desktop apps haven't been tried on a coworker's machine yet:**
+  the Linux Claude package's desktop file name, and the Mac bundle ids
+  ([0023](0023-desktop-apps-and-sign-in-buttons.md)).
 - **The Mac app isn't notarized.** Browser downloads need the `xattr` line
   until there's an Apple Developer account
   ([0021](0021-install-on-macos-from-the-release-zip.md)).

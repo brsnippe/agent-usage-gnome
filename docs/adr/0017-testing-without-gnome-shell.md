@@ -30,6 +30,7 @@ tested directly with `gjs`:
 | Settings window | Built off-screen with the real GTK 4 and libadwaita and an in-memory GSettings backend; fields and settings checked both ways |
 | Claude collector's back-off | `test/claude-limits-test.py` loads the real script with a fake clock and a fake Anthropic endpoint |
 | Claude collector's macOS sign-in | `test/claude-keychain-test.py` loads the real script with a fake `security` command standing in for the Keychain |
+| Codex collector, signed out | `test/codex-sign-in-test.py` loads the real script with a fake `codex app-server` that answers as Codex 0.159 does |
 | Install, update and uninstall from git | `test/cli-test.sh`, against a local bare repository with release tags; GNOME's tools (`gnome-shell`, `gsettings`, `gnome-extensions`, `dpkg-query`) replaced by small scripts |
 | Installer migrations (the tray version, the old ID) | The same stand-ins, in throwaway home folders |
 | Collectors | Run against real data on the development machine, with their output sent to temporary folders, so Omarchy's own widget there is never touched |

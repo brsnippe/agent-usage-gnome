@@ -58,12 +58,15 @@ final class ReleasesTests: XCTestCase {
     func testSettingsChoices() {
         let mac = Machine(
             findProgram: { ["opencode", "claude"].contains($0) ? "/opt/homebrew/bin/\($0)" : nil },
-            findApp: { ["Terminal.app", "Ghostty.app"].contains($0.appName) ? "/Applications/\($0.appName)" : nil },
+            findApp: { ["Terminal.app", "Ghostty.app", "Claude.app"].contains($0.appName) ? "/Applications/\($0.appName)" : nil },
             shell: "/bin/zsh",
             home: "/Users/me"
         )
-        XCTAssertEqual(Terminals.agentChoices(on: mac).map(\.label), ["OpenCode", "Claude Code", "Codex (not installed)", "Custom…"])
-        XCTAssertEqual(Terminals.agentChoices(on: mac).map(\.id), ["opencode", "claude", "codex", "custom"])
+        XCTAssertEqual(Terminals.agentChoices(on: mac).map(\.label), [
+            "OpenCode", "OpenCode (desktop app) (not installed)", "Claude Code", "Claude (desktop app)", "Codex (not installed)", "Custom…",
+        ])
+        XCTAssertEqual(Terminals.agentChoices(on: mac).map(\.id), ["opencode", "opencode-desktop", "claude", "claude-desktop", "codex", "custom"],
+                       "the GNOME schema's ids")
         XCTAssertEqual(Terminals.terminalChoices(current: "auto", on: mac).map(\.label), ["Automatic (Terminal)", "Terminal", "Ghostty", "Custom…"],
                        "the installed terminals, in list order")
         XCTAssertEqual(Terminals.terminalChoices(current: "kitty", on: mac).map(\.label),

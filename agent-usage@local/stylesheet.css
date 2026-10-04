@@ -106,6 +106,7 @@
 
 .agent-usage-status {
   padding: 10px 12px;
+  spacing: 10px;
   background-color: rgba(195, 64, 67, 0.10);
   border: 1px solid rgba(195, 64, 67, 0.35);
 }
@@ -113,6 +114,24 @@
 .agent-usage-status-text {
   font-size: 8.5pt;
   color: #8e8b78;
+}
+
+.agent-usage-status-actions {
+  spacing: 8px;
+}
+
+.agent-usage-status-button {
+  padding: 4px 10px;
+  font-size: 8.5pt;
+  color: #dcd7ba;
+  border: 1px solid rgba(220, 215, 186, 0.35);
+  border-radius: 0;
+}
+
+.agent-usage-status-button:hover,
+.agent-usage-status-button:focus {
+  border-color: #dcd7ba;
+  background-color: rgba(220, 215, 186, 0.08);
 }
 
 /* ---- sections */
