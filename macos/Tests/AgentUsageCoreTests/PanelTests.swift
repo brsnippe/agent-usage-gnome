@@ -9,8 +9,11 @@ final class PanelTests: XCTestCase {
     let pi = AgentRecord(["id": "pi", "totalPrompts": 1])
 
     func testMenuBar() {
-        XCTAssertEqual(Panel.menuBarText([claude, codex]), "61%")
-        XCTAssertNil(Panel.menuBarText([codex]), "no limits, no percentage")
+        XCTAssertEqual(Panel.menuBarText([claude, codex], sessionFrom: 40), "61%")
+        XCTAssertNil(Panel.menuBarText([codex], sessionFrom: 40), "no limits, no percentage")
+        let busyWeek = AgentRecord(["limits": [["label": "Session (5-hour)", "percent": 0.45], ["label": "Weekly (7-day)", "percent": 0.8]]])
+        XCTAssertEqual([Panel.menuBarText([busyWeek], sessionFrom: 40), Panel.menuBarText([busyWeek], sessionFrom: 50)], ["45%", "80%"],
+                       "the session from the setting on")
         XCTAssertEqual([Panel.percentText(0.005), Panel.percentText(0.9), Panel.percentText(1)], ["1%", "90%", "100%"])
         XCTAssertFalse(Panel.menuBarAlarming([claude]))
         XCTAssertTrue(Panel.menuBarAlarming([AgentRecord(["limits": [["percent": 0.95]]])]))

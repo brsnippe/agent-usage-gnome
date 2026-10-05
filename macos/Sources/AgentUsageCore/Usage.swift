@@ -220,6 +220,18 @@ public enum Usage {
         records.flatMap(\.limitWindows).map(\.percent).max()
     }
 
+    /// The number in the menu bar: the fullest session window once it reaches
+    /// `sessionFrom` percent, even when a weekly window is fuller; until then
+    /// the fullest window. Compared as shown, so a session that reads "40%"
+    /// counts as 40.
+    public static func topBarPercent(_ records: [AgentRecord], sessionFrom: Int) -> Double? {
+        let session = records.flatMap(\.limitWindows).filter { $0.title == "Session" }.map(\.percent).max()
+        if let session, JS.round(session * 100) >= Double(sessionFrom) {
+            return session
+        }
+        return highestPercent(records)
+    }
+
     public static func lastUpdated(_ records: [AgentRecord]) -> Date? {
         records.compactMap { parseTime($0["updatedAt"]) }.max()
     }

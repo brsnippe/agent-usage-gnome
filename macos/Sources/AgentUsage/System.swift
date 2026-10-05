@@ -110,6 +110,7 @@ enum ReleaseChecker {
 enum Settings {
     static let limitsInterval = "limitsInterval"
     static let scanInterval = "scanInterval"
+    static let sessionThreshold = "sessionThreshold"
     static let agent = "agent"
     static let agentCommand = "agentCommand"
     static let terminal = "terminal"
@@ -119,7 +120,7 @@ enum Settings {
 
     static func registerDefaults() {
         UserDefaults.standard.register(defaults: [
-            limitsInterval: 300, scanInterval: 15, agent: "opencode", agentCommand: "",
+            limitsInterval: 300, scanInterval: 15, sessionThreshold: 40, agent: "opencode", agentCommand: "",
             terminal: "auto", terminalCommand: "", checkUpdates: true,
         ])
     }

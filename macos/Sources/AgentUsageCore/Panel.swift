@@ -17,9 +17,10 @@ public enum Panel {
         "\(Int(JS.round(ratio * 100)))%"
     }
 
-    /// The menu bar's label: the fullest limit, or nil with no limits at all.
-    public static func menuBarText(_ providers: [AgentRecord]) -> String? {
-        Usage.highestPercent(providers).map(percentText)
+    /// The menu bar's label: the session limit from `sessionFrom` percent on,
+    /// otherwise the fullest limit, or nil with no limits at all.
+    public static func menuBarText(_ providers: [AgentRecord], sessionFrom: Int) -> String? {
+        Usage.topBarPercent(providers, sessionFrom: sessionFrom).map(percentText)
     }
 
     public static func menuBarAlarming(_ providers: [AgentRecord]) -> Bool {

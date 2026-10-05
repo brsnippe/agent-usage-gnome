@@ -49,6 +49,17 @@ check('only agents with data show, sorted', Usage.visibleProviders([idle, codex,
 check('nothing to show', Usage.visibleProviders([idle]).length, 0);
 check('top-bar percent is the fullest window', Usage.highestPercent([claude, codex]), 0.61);
 check('no limits, no percent', Usage.highestPercent([codex]), null);
+const limits = (session, weekly) => ({limits: [{label: 'Session (5-hour)', percent: session}, {label: 'Weekly (7-day)', percent: weekly}]});
+check('top bar: the session from the threshold on, even when the week is fuller', Usage.topBarPercent([limits(0.45, 0.8)], 40), 0.45);
+check('top bar: the fullest window below the threshold', Usage.topBarPercent([limits(0.3, 0.8)], 40), 0.8);
+check('top bar: a session that reads 40% counts as 40', Usage.topBarPercent([limits(0.396, 0.8)], 40), 0.396);
+check('top bar: a session just under it does not', Usage.topBarPercent([limits(0.394, 0.8)], 40), 0.8);
+check('top bar: the fuller session is still the fullest window', Usage.topBarPercent([limits(0.7, 0.2)], 40), 0.7);
+check('top bar: 0 always shows the session', Usage.topBarPercent([limits(0.05, 0.8)], 0), 0.05);
+check('top bar: the fullest session across agents', Usage.topBarPercent([limits(0.5, 0.9), limits(0.2, 0.1)], 40), 0.5);
+check('top bar: Codex\'s "5h window" is a session', Usage.topBarPercent([{limits: [{label: '5h window', percent: 0.42}, {label: 'Weekly', percent: 0.6}]}], 40), 0.42);
+check('top bar: no session, the fullest window', Usage.topBarPercent([{limits: [{label: 'Weekly (7-day)', percent: 0.6}]}], 40), 0.6);
+check('top bar: no limits, no percent', Usage.topBarPercent([codex], 40), null);
 check('alarm at 90%', [Usage.isAlarming(claude), Usage.isAlarming({limits: [{label: '5h', percent: 0.9}]})], [false, true]);
 check('balance alarm at 10% left', [
     Usage.isAlarming({balance: {remaining: 4, funded: 50}}),

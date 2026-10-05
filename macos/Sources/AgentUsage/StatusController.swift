@@ -42,9 +42,10 @@ final class StatusController: NSObject, NSWindowDelegate {
 
     // ------------------------------------------------------------ menu bar
 
-    /// The robot and the fullest limit, red from 90%, faded while the numbers
-    /// are from an earlier check. Unlike on GNOME the robot always shows, so
-    /// there's something to click before the first scan.
+    /// The robot and the fullest limit (the session limit once it reaches the
+    /// setting), red from 90%, faded while the numbers are from an earlier
+    /// check. Unlike on GNOME the robot always shows, so there's something to
+    /// click before the first scan.
     func updateMenuBar() {
         guard let button = item.button else {
             return
@@ -53,7 +54,8 @@ final class StatusController: NSObject, NSWindowDelegate {
         let alarming = Panel.menuBarAlarming(providers)
         button.image = Assets.robot
         button.contentTintColor = alarming ? Theme.urgentNS : nil
-        guard let text = Panel.menuBarText(providers) else {
+        let sessionFrom = UserDefaults.standard.integer(forKey: Settings.sessionThreshold)
+        guard let text = Panel.menuBarText(providers, sessionFrom: sessionFrom) else {
             button.title = ""
             button.imagePosition = .imageOnly
             return

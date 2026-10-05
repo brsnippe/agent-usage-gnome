@@ -101,6 +101,7 @@ struct SettingsView: View {
     @ObservedObject var model: SettingsModel
     @AppStorage(Settings.limitsInterval) private var limits = 300
     @AppStorage(Settings.scanInterval) private var scan = 15
+    @AppStorage(Settings.sessionThreshold) private var sessionFrom = 40
     @AppStorage(Settings.agent) private var agent = "opencode"
     @AppStorage(Settings.agentCommand) private var agentCommand = ""
     @AppStorage(Settings.terminal) private var terminal = "auto"
@@ -130,6 +131,19 @@ struct SettingsView: View {
                 Text("Refresh")
             } footer: {
                 note("Changes apply right away. Opening the panel always checks limits too, and so do unlocking and waking the Mac. Anthropic refuses checks that come too often; checking then pauses for 1 to 15 minutes. Rescans reread transcripts and OpenCode history for the token charts.")
+            }
+
+            Section {
+                LabeledContent("Show the session limit from") {
+                    HStack {
+                        Text("\(sessionFrom)%").foregroundColor(.secondary)
+                        Stepper("Show the session limit from", value: $sessionFrom, in: 0...100, step: 5).labelsHidden()
+                    }
+                }
+            } header: {
+                Text("Menu bar")
+            } footer: {
+                note("Once the 5-hour session limit is this full, the menu bar shows it, even when the weekly limit is fuller. Below it, the menu bar shows the fullest limit. 0% always shows the session limit.")
             }
 
             Section {

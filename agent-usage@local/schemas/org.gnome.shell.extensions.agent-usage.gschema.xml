@@ -13,6 +13,12 @@
       <summary>Minutes between full rescans of local usage</summary>
       <description>How often to reread transcripts and OpenCode history for the token charts.</description>
     </key>
+    <key name="session-threshold" type="i">
+      <default>40</default>
+      <range min="0" max="100"/>
+      <summary>Show the session limit in the top bar from this percentage</summary>
+      <description>Once the 5-hour session limit is at least this full, the top bar shows it, even when the weekly limit is fuller. Below it, the top bar shows the fullest limit. 0 always shows the session limit.</description>
+    </key>
     <key name="check-updates" type="b">
       <default>true</default>
       <summary>Check for new releases</summary>

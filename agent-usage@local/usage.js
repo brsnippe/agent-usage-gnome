@@ -227,6 +227,22 @@ export function highestPercent(records) {
     return highest;
 }
 
+// The number in the top bar: the fullest session window once it reaches
+// `sessionFrom` percent, even when a weekly window is fuller; until then the
+// fullest window. Compared as shown, so a session that reads "40%" counts as 40.
+export function topBarPercent(records, sessionFrom) {
+    let session = null;
+    for (const record of records) {
+        for (const window of limitWindows(record)) {
+            if (window.title === 'Session')
+                session = session === null ? window.percent : Math.max(session, window.percent);
+        }
+    }
+    if (session !== null && Math.round(session * 100) >= sessionFrom)
+        return session;
+    return highestPercent(records);
+}
+
 // The plan you pay for, or the problem that's in the way.
 export function heroMeta(record) {
     const status = String(record?.usageStatusText || '');

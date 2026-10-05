@@ -31,6 +31,7 @@ final class AppModel {
     private var signInChecksLeft = 0
     private var observers: [(NotificationCenter, NSObjectProtocol)] = []
     private var appliedSettings: [String] = []
+    private var appliedSessionThreshold = 0
     /// GNOME switches extensions off while the screen is locked; here the
     /// timers just don't check then.
     private var locked = false
@@ -76,6 +77,7 @@ final class AppModel {
         watch()
         observeSystem()
         appliedSettings = settingsKey
+        appliedSessionThreshold = UserDefaults.standard.integer(forKey: Settings.sessionThreshold)
         runUpdate(.normal)
         restartTimers()
         restartReleaseChecks()
@@ -233,6 +235,11 @@ final class AppModel {
     /// Changes apply right away, as in GNOME's settings.
     private func settingsChanged() {
         refreshLaunchHint()
+        let sessionThreshold = UserDefaults.standard.integer(forKey: Settings.sessionThreshold)
+        if sessionThreshold != appliedSessionThreshold {
+            appliedSessionThreshold = sessionThreshold
+            onRecordsChange?()
+        }
         let key = settingsKey
         guard key != appliedSettings else {
             return

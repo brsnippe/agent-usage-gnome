@@ -176,6 +176,7 @@ class AgentUsageIndicator extends PanelMenu.Button {
         for (const key of LAUNCH_KEYS)
             this._settingsIds.push(this._settings.connect(`changed::${key}`, () => this._buildPanel()));
         this._settingsIds.push(this._settings.connect('changed::check-updates', () => this._restartReleaseChecks()));
+        this._settingsIds.push(this._settings.connect('changed::session-threshold', () => this._showPercent()));
 
         // logind announces suspend and resume. With lock-on-suspend (Ubuntu's
         // default) GNOME re-enables extensions at unlock, which refreshes too;
@@ -556,10 +557,19 @@ class AgentUsageIndicator extends PanelMenu.Button {
         // Nothing to report, nothing in the top bar: the icon appears the moment
         // the first scan finds usage.
         this.visible = this._providers.length > 0;
+        this._showPercent();
 
-        const highest = Usage.highestPercent(this._providers);
-        this._label.text = highest === null ? '' : `${Math.round(highest * 100)}%`;
-        this._label.visible = highest !== null;
+        // The selection follows the agent, not its slot, so a second agent's
+        // first scan doesn't swap out what you were reading.
+        if (!this._providers.some(record => String(record.id) === this._selectedId))
+            this._selectedId = this._providers.length > 0 ? String(this._providers[0].id) : '';
+        this._buildPanel();
+    }
+
+    _showPercent() {
+        const percent = Usage.topBarPercent(this._providers, this._settings.get_int('session-threshold'));
+        this._label.text = percent === null ? '' : `${Math.round(percent * 100)}%`;
+        this._label.visible = percent !== null;
         const alarming = this._providers.some(Usage.isAlarming);
         for (const actor of [this._icon, this._label]) {
             if (alarming)
@@ -569,12 +579,6 @@ class AgentUsageIndicator extends PanelMenu.Button {
         }
         // A percentage from an earlier check fades, so it doesn't pass for live.
         this._label.opacity = this._providers.some(Usage.limitsStale) ? 140 : 255;
-
-        // The selection follows the agent, not its slot, so a second agent's
-        // first scan doesn't swap out what you were reading.
-        if (!this._providers.some(record => String(record.id) === this._selectedId))
-            this._selectedId = this._providers.length > 0 ? String(this._providers[0].id) : '';
-        this._buildPanel();
     }
 
     _buildPanel() {

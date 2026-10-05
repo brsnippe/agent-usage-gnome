@@ -3,6 +3,18 @@
 Versions are git tags (`v0.6.0`, …). `agent-usage update` installs the newest
 one.
 
+## 0.9.0
+
+The top bar follows the session limit once it fills up. On GNOME and on a
+Mac.
+
+- **Top bar:** once the 5-hour session limit is 40% full, the top bar shows
+  it, even when the weekly limit is fuller. Below that it still shows the
+  fullest limit. It still turns red when any limit reaches 90%.
+- **Settings:** *Show the session limit from* sets the percentage, from 0 to
+  100. It's under *Top bar* on GNOME and *Menu bar* on a Mac. At 0 the top
+  bar always shows the session limit.
+
 ## 0.8.1
 
 New releases show up sooner. On GNOME and on a Mac.

@@ -82,6 +82,20 @@ final class UsageTests: XCTestCase {
         XCTAssertEqual(Usage.visibleProviders([idle]).count, 0, "nothing to show")
         XCTAssertEqual(Usage.highestPercent([claude, codex]), 0.61, "the menu bar percent is the fullest window")
         XCTAssertNil(Usage.highestPercent([codex]), "no limits, no percent")
+        func limits(_ session: Double, _ weekly: Double) -> AgentRecord {
+            AgentRecord(["limits": [["label": "Session (5-hour)", "percent": .number(session)], ["label": "Weekly (7-day)", "percent": .number(weekly)]]])
+        }
+        XCTAssertEqual(Usage.topBarPercent([limits(0.45, 0.8)], sessionFrom: 40), 0.45, "the session from the threshold on, even when the week is fuller")
+        XCTAssertEqual(Usage.topBarPercent([limits(0.3, 0.8)], sessionFrom: 40), 0.8, "the fullest window below the threshold")
+        XCTAssertEqual(Usage.topBarPercent([limits(0.396, 0.8)], sessionFrom: 40), 0.396, "a session that reads 40% counts as 40")
+        XCTAssertEqual(Usage.topBarPercent([limits(0.394, 0.8)], sessionFrom: 40), 0.8, "a session just under it does not")
+        XCTAssertEqual(Usage.topBarPercent([limits(0.7, 0.2)], sessionFrom: 40), 0.7, "the fuller session is still the fullest window")
+        XCTAssertEqual(Usage.topBarPercent([limits(0.05, 0.8)], sessionFrom: 0), 0.05, "0 always shows the session")
+        XCTAssertEqual(Usage.topBarPercent([limits(0.5, 0.9), limits(0.2, 0.1)], sessionFrom: 40), 0.5, "the fullest session across agents")
+        XCTAssertEqual(Usage.topBarPercent([AgentRecord(["limits": [["label": "5h window", "percent": 0.42], ["label": "Weekly", "percent": 0.6]]])], sessionFrom: 40),
+                       0.42, "Codex's \"5h window\" is a session")
+        XCTAssertEqual(Usage.topBarPercent([AgentRecord(["limits": [["label": "Weekly (7-day)", "percent": 0.6]]])], sessionFrom: 40), 0.6, "no session, the fullest window")
+        XCTAssertNil(Usage.topBarPercent([codex], sessionFrom: 40), "no limits, no percent")
         XCTAssertEqual([claude.isAlarming, AgentRecord(["limits": [["label": "5h", "percent": 0.9]]]).isAlarming], [false, true], "alarm at 90%")
         XCTAssertEqual([
             AgentRecord(["balance": ["remaining": 4, "funded": 50]]).isAlarming,

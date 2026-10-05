@@ -7,7 +7,8 @@ tokens by day and by model. That includes sessions you ran in **OpenCode v2**.
 On a Mac it's the same panel under a menu bar icon: see [macOS](#macos).
 
 - **Top bar:** a robot icon with your fullest limit (`61%`). It turns red at
-  90% or more. It stays hidden until an agent has usage to show.
+  90% or more. It stays hidden until an agent has usage to show. See
+  [Which limit the top bar shows](#which-limit-the-top-bar-shows).
 - **Panel:**
   - **Header:** the agent's logo, name and plan, with refresh, *Open agent*
     and ⚙ settings buttons.
@@ -137,6 +138,16 @@ away.
 - **Full rescans** can run every 5 to 60 minutes.
 - **No checks while locked:** GNOME switches extensions off while the screen
   is locked, so nothing runs while you're away.
+
+## Which limit the top bar shows
+
+- **Usually the fullest limit,** whichever agent and window it belongs to.
+- **The 5-hour session limit once it's 40% full,** even when the weekly limit
+  is fuller. That's the one that stops you today. Set the percentage under
+  *Top bar* in the settings (*Menu bar* on a Mac), from 0 to 100. At 0 the
+  top bar always shows the session limit.
+- **Red** still means *any* limit is at 90% or more, also when the top bar
+  shows the session.
 
 ## Opening your agent
 
@@ -322,7 +333,7 @@ The extension lives in `agent-usage@local/`:
 | `extension.js`, `usage.js`, `updates.js`, `stylesheet.css` | The top-bar button and panel. They schedule the updater and display those JSON files |
 | `terminals.js` | Which agent or desktop app to open, how to start each terminal, and the sign-in commands. The panel and the settings window both use it |
 | `versions.js` | Compares release versions for the update notice |
-| `prefs.js`, `schemas/` | The settings window and its settings: the refresh intervals, the agent, the terminal and update checks |
+| `prefs.js`, `schemas/` | The settings window and its settings: the refresh intervals, which limit the top bar shows, the agent, the terminal and update checks |
 
 Around it, in the repository:
 

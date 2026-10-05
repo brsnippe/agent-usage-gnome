@@ -32,6 +32,7 @@ export default class AgentUsagePreferences extends ExtensionPreferences {
 
         const page = new Adw.PreferencesPage({title: 'General', icon_name: 'preferences-system-symbolic'});
         page.add(this._refreshGroup(settings));
+        page.add(this._topBarGroup(settings));
         page.add(this._launchGroup(settings));
         page.add(this._updatesGroup(settings, cancellable));
         window.add(page);
@@ -140,6 +141,18 @@ export default class AgentUsagePreferences extends ExtensionPreferences {
         });
         settings.bind('scan-interval', scan, 'value', Gio.SettingsBindFlags.DEFAULT);
         group.add(scan);
+        return group;
+    }
+
+    _topBarGroup(settings) {
+        const group = new Adw.PreferencesGroup({title: 'Top bar'});
+        const session = new Adw.SpinRow({
+            title: 'Show the session limit from',
+            subtitle: 'Percent. Once the 5-hour session limit is this full, the top bar shows it, even when the weekly limit is fuller. Below it, the top bar shows the fullest limit. 0 always shows the session limit.',
+            adjustment: new Gtk.Adjustment({lower: 0, upper: 100, step_increment: 5, page_increment: 10}),
+        });
+        settings.bind('session-threshold', session, 'value', Gio.SettingsBindFlags.DEFAULT);
+        group.add(session);
         return group;
     }
 

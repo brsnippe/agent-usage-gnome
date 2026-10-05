@@ -31,7 +31,7 @@ else
   fi
 fi
 echo "enabled-extensions: $(gsettings get org.gnome.shell enabled-extensions)"
-for key in limits-interval scan-interval agent agent-command terminal terminal-command; do
+for key in limits-interval scan-interval session-threshold agent agent-command terminal terminal-command; do
   echo "$key: $(gsettings --schemadir "$EXT_DIR/schemas" get org.gnome.shell.extensions.agent-usage "$key" 2>&1)"
 done
 
