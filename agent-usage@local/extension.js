@@ -624,7 +624,8 @@ class AgentUsageIndicator extends PanelMenu.Button {
         const models = Usage.modelRows(record);
         if (models.length > 0) {
             this._panel.add_child(separator());
-            this._panel.add_child(this._modelsSection('ALL TIME BY MODEL', models, Usage.modelDetail));
+            this._panel.add_child(this._modelsSection(Usage.allTimeTitle(record), models, Usage.modelDetail,
+                {hint: Usage.allTimeDetail(record)}));
         }
 
         this._footer = label('', 'agent-usage-footer', {x_expand: true, reactive: true, track_hover: true});
@@ -821,8 +822,8 @@ class AgentUsageIndicator extends PanelMenu.Button {
 
     // One section of model rows: the bar fills behind each row, scaled to the
     // heaviest model so the top row is always full.
-    _modelsSection(title, models, detail) {
-        const section = this._section(title);
+    _modelsSection(title, models, detail, {hint = null} = {}) {
+        const section = this._section(title, {hint});
         const heaviest = Math.max(1, models[0].total);
         for (const model of models) {
             const row = new St.Widget({

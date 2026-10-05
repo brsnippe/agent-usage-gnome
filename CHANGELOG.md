@@ -3,6 +3,16 @@
 Versions are git tags (`v0.6.0`, …). `agent-usage update` installs the newest
 one.
 
+## 0.10.0
+
+The all-time token total. On GNOME and on a Mac.
+
+- **All time by model:** the heading shows the agent's total tokens of all
+  time, e.g. `ALL TIME BY MODEL · 1.2B`. It counts every model, cache
+  included, not just the four listed.
+- **Hover the heading** for the sessions, prompts and active days behind
+  it.
+
 ## 0.9.0
 
 The top bar follows the session limit once it fills up. On GNOME and on a

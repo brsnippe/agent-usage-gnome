@@ -20,8 +20,13 @@ On a Mac it's the same panel under a menu bar icon: see [macOS](#macos).
     - **Limits** and **Tokens by day.**
     - **Today by model:** today's tokens per model, with each model's share of
       the day on hover.
-    - **All time by model:** the top 4 models by all-time tokens, with the
-      in/out/cache split on hover.
+    - **All time by model:** the agent's all-time token total in the
+      heading (`ALL TIME BY MODEL · 1.2B`), then the top 4 models with the
+      in/out/cache split on hover. The total counts every model, cache
+      included, not just the four listed. Hovering the heading shows the
+      sessions, prompts and active days behind it. For Codex, "all time" is
+      about the last 30 days: its collector only reads Codex sessions and
+      OpenCode usage from that long ago.
 
     All of them use real bars, and hovering a row shows details in the
     bottom line. On a small screen the panel scrolls rather than running off

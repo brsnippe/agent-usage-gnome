@@ -144,7 +144,8 @@ struct Samples {
         ]
         var fields: [String: JSONValue] = [
             "id": "claude", "name": "Claude Code", "tierLabel": "Max 5x", "usageStatusText": "", "authHelpText": "",
-            "totalPrompts": 74, "todayPrompts": 30, "todaySessions": 2, "hasPromptStats": true, "updatedAt": at(-60),
+            "totalPrompts": 74, "totalSessions": 6, "activeDays": 5, "todayPrompts": 30, "todaySessions": 2, "hasPromptStats": true,
+            "updatedAt": at(-60),
             "limits": [
                 ["label": "Session (5-hour)", "percent": 0.61, "resetsAt": at(23 * 60 + 5)],
                 ["label": "Weekly (7-day)", "percent": 0.18, "resetsAt": at(5 * 86400 + 3600)],

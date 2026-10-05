@@ -76,6 +76,19 @@ check('other problems offer none', [
 ].map(record => Usage.signInActions(record).length), [0, 0, 0, 0, 0]);
 check('model rows sorted by total', Usage.modelRows(claude).map(r => [r.name, r.total]), [['Opus 5.5', 5353410], ['Sonnet 4.5', 10]]);
 check('model detail', Usage.modelDetail(Usage.modelRows(claude)[0]), 'Opus 5.5 · in 168 · out 50.6K · cache 5.0M/289.4K');
+
+const manyAllTime = {modelUsage: Object.fromEntries([1, 2, 3, 4, 5, 6].map(n => [`claude-opus-4-${n}`, {inputTokens: n * 100, cacheReadInputTokens: n * 900}]))};
+check('all-time list stops at 4', Usage.modelRows(manyAllTime).length, 4);
+check('all-time total counts every model, cache included', [Usage.allTimeTotal(manyAllTime), Usage.allTimeTotal(claude)], [21000, 5353420]);
+check('all-time total in the heading', Usage.allTimeTitle(claude), 'ALL TIME BY MODEL · 5.4M');
+check('no models, no total', [Usage.allTimeTotal({}), Usage.allTimeTotal({modelUsage: null})], [0, 0]);
+check('all-time counts on hover', Usage.allTimeDetail({totalSessions: 412, totalPrompts: 9812, activeDays: 38}),
+    '412 sessions · 9.8K prompts · 38 days');
+check('all-time counts skip zeros and say 1 in the singular', Usage.allTimeDetail({totalSessions: 1, totalPrompts: 0, activeDays: 1}),
+    '1 session · 1 day');
+check('agents without prompt stats show only days', Usage.allTimeDetail({hasPromptStats: false, totalSessions: 5, totalPrompts: 9, activeDays: 3}),
+    '3 days');
+check('no counts, no hover', [Usage.allTimeDetail({}), Usage.allTimeDetail(undefined)], [null, null]);
 check('day detail for today has prompts', Usage.dayDetail(claude.recentDays[1], true, claude).replace(/^\w+ \d+\/\d+/, 'DAY'),
     'DAY · 103.0M tokens · 30 prompts · 1 session');
 check('day detail for other days', Usage.dayDetail(claude.recentDays[0], false, claude), 'Wed 9/30 · 42.7K tokens');

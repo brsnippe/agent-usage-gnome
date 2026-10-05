@@ -141,7 +141,8 @@ struct PanelContent: View {
         let models = record.modelRows
         if !models.isEmpty {
             Separator()
-            ModelsSection(title: "ALL TIME BY MODEL", key: "all", rows: models.map { (name: $0.name, total: $0.total, detail: $0.detail) }, model: model)
+            ModelsSection(title: record.allTimeTitle, key: "all", rows: models.map { (name: $0.name, total: $0.total, detail: $0.detail) },
+                          hint: record.allTimeDetail, model: model)
         }
     }
 }
@@ -460,11 +461,12 @@ struct ModelsSection: View {
     var title: String
     var key: String
     var rows: [(name: String, total: Int, detail: String)]
+    var hint: String? = nil
     @ObservedObject var model: PanelModel
 
     var body: some View {
         let values = Panel.modelBarValues(rows.map { $0.total })
-        PanelSection(title: title, model: model) {
+        PanelSection(title: title, hint: hint, model: model) {
             ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
                 let id = "\(key)-\(index)"
                 HStack {

@@ -245,6 +245,12 @@ public enum Usage {
     static func plural(_ count: Int, _ word: String) -> String {
         "\(count) \(word)\(count == 1 ? "" : "s")"
     }
+
+    /// All-time counts run into the thousands; shorten them the way tokens
+    /// are.
+    static func compactPlural(_ count: Int, _ word: String) -> String {
+        "\(formatTokens(count)) \(word)\(count == 1 ? "" : "s")"
+    }
 }
 
 // ----------------------------------------------------------------- records
@@ -483,9 +489,9 @@ public struct AgentRecord: Equatable {
         return text
     }
 
-    /// The heaviest models of all time. JSON objects have no order once
-    /// decoded, so equal totals fall back to the model id.
-    public var modelRows: [ModelRow] {
+    /// Every model of all time, heaviest first. JSON objects have no order
+    /// once decoded, so equal totals fall back to the model id.
+    private var allModelRows: [ModelRow] {
         let usage = fields["modelUsage"]?.objectValue ?? [:]
         let rows = usage.map { id, raw -> (String, ModelRow) in
             let bucket = raw.objectValue ?? [:]
@@ -499,8 +505,43 @@ public struct AgentRecord: Equatable {
         }
         return rows
             .sorted { $0.1.total != $1.1.total ? $0.1.total > $1.1.total : $0.0 < $1.0 }
-            .prefix(Usage.maxModels)
             .map(\.1)
+    }
+
+    /// The heaviest models of all time.
+    public var modelRows: [ModelRow] {
+        Array(allModelRows.prefix(Usage.maxModels))
+    }
+
+    /// Every model counts, also the ones past the list's cap.
+    public var allTimeTotal: Int {
+        allModelRows.reduce(0) { $0 + $1.total }
+    }
+
+    public var allTimeTitle: String {
+        "ALL TIME BY MODEL · \(Usage.formatTokens(allTimeTotal))"
+    }
+
+    /// The heading's hover: the all-time counts behind the total. Agents
+    /// without prompt stats leave out prompts and sessions, as on the day
+    /// rows; zeros are gaps, not counts.
+    public var allTimeDetail: String? {
+        var parts: [String] = []
+        if fields["hasPromptStats"] != .bool(false) {
+            let sessions = Usage.number(fields["totalSessions"])
+            let prompts = Usage.number(fields["totalPrompts"])
+            if sessions > 0 {
+                parts.append(Usage.compactPlural(sessions, "session"))
+            }
+            if prompts > 0 {
+                parts.append(Usage.compactPlural(prompts, "prompt"))
+            }
+        }
+        let days = Usage.number(fields["activeDays"])
+        if days > 0 {
+            parts.append(Usage.compactPlural(days, "day"))
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     /// Today's tokens per model. Collectors only total these per model,

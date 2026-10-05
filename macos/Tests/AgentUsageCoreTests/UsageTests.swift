@@ -129,6 +129,23 @@ final class UsageTests: XCTestCase {
         XCTAssertEqual(claude.modelRows.map(\.total), [5_353_410, 10])
         XCTAssertEqual(claude.modelRows[0].detail, "Opus 5.5 · in 168 · out 50.6K · cache 5.0M/289.4K")
 
+        var allTime: [String: JSONValue] = [:]
+        for n in 1...6 {
+            allTime["claude-opus-4-\(n)"] = ["inputTokens": .number(Double(n * 100)), "cacheReadInputTokens": .number(Double(n * 900))]
+        }
+        let manyAllTime = AgentRecord(["modelUsage": .object(allTime)])
+        XCTAssertEqual(manyAllTime.modelRows.count, 4, "the all-time list stops at 4")
+        XCTAssertEqual([manyAllTime.allTimeTotal, claude.allTimeTotal], [21000, 5_353_420], "the all-time total counts every model, cache included")
+        XCTAssertEqual(claude.allTimeTitle, "ALL TIME BY MODEL · 5.4M", "the all-time total in the heading")
+        XCTAssertEqual([AgentRecord([:]).allTimeTotal, AgentRecord(["modelUsage": nil]).allTimeTotal], [0, 0], "no models, no total")
+        XCTAssertEqual(AgentRecord(["totalSessions": 412, "totalPrompts": 9812, "activeDays": 38]).allTimeDetail,
+                       "412 sessions · 9.8K prompts · 38 days", "all-time counts on hover")
+        XCTAssertEqual(AgentRecord(["totalSessions": 1, "totalPrompts": 0, "activeDays": 1]).allTimeDetail,
+                       "1 session · 1 day", "all-time counts skip zeros and say 1 in the singular")
+        XCTAssertEqual(AgentRecord(["hasPromptStats": false, "totalSessions": 5, "totalPrompts": 9, "activeDays": 3]).allTimeDetail,
+                       "3 days", "agents without prompt stats show only days")
+        XCTAssertNil(AgentRecord([:]).allTimeDetail, "no counts, no hover")
+
         let busyDay = AgentRecord([
             "todayTotalTokens": 188_400_000,
             "todayTokensByModel": ["claude-opus-5": 68_300_000, "claude-opus-5-5": 120_100_000, "claude-haiku-4-5": 0],

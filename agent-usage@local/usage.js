@@ -57,6 +57,11 @@ function plural(count, word) {
     return `${count} ${word}${count === 1 ? '' : 's'}`;
 }
 
+// All-time counts run into the thousands; shorten them the way tokens are.
+function compactPlural(count, word) {
+    return `${formatTokens(count)} ${word}${count === 1 ? '' : 's'}`;
+}
+
 // Epoch milliseconds, or NaN. JS dates stop at milliseconds and the
 // collectors write microseconds, so trim the fraction first.
 export function parseTime(value) {
@@ -293,7 +298,7 @@ export function dayDetail(day, isToday, record) {
     return text;
 }
 
-export function modelRows(record) {
+function allModelRows(record) {
     const rows = [];
     for (const [id, raw] of Object.entries(record?.modelUsage ?? {})) {
         const bucket = raw && typeof raw === 'object' ? raw : {};
@@ -308,7 +313,39 @@ export function modelRows(record) {
         rows.push(row);
     }
     rows.sort((a, b) => b.total - a.total);
-    return rows.slice(0, MAX_MODELS);
+    return rows;
+}
+
+export function modelRows(record) {
+    return allModelRows(record).slice(0, MAX_MODELS);
+}
+
+// Every model counts, also the ones past the list's cap.
+export function allTimeTotal(record) {
+    return allModelRows(record).reduce((sum, row) => sum + row.total, 0);
+}
+
+export function allTimeTitle(record) {
+    return `ALL TIME BY MODEL · ${formatTokens(allTimeTotal(record))}`;
+}
+
+// The heading's hover: the all-time counts behind the total. Agents without
+// prompt stats leave out prompts and sessions, as on the day rows; zeros are
+// gaps, not counts.
+export function allTimeDetail(record) {
+    const parts = [];
+    if (record?.hasPromptStats !== false) {
+        const sessions = number(record?.totalSessions);
+        const prompts = number(record?.totalPrompts);
+        if (sessions > 0)
+            parts.push(compactPlural(sessions, 'session'));
+        if (prompts > 0)
+            parts.push(compactPlural(prompts, 'prompt'));
+    }
+    const days = number(record?.activeDays);
+    if (days > 0)
+        parts.push(compactPlural(days, 'day'));
+    return parts.length > 0 ? parts.join(' · ') : null;
 }
 
 // Today's tokens per model. Collectors only total these per model, without
