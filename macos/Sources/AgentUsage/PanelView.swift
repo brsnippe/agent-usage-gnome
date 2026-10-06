@@ -28,6 +28,7 @@ struct PanelActions {
     var refresh: () -> Void = {}
     var openAgent: () -> Void = {}
     var openSettings: () -> Void = {}
+    var quit: () -> Void = {}
     var select: (String) -> Void = { _ in }
     var footer: () -> Void = {}
     /// A problem card's sign-in button, for the agent with this id.
@@ -93,6 +94,12 @@ struct PanelContent: View {
                 sections(record)
                 Footer(model: model, record: record)
             } else {
+                // The robot is always in the menu bar, so an empty panel keeps
+                // ⚙ and ⏻.
+                HStack(spacing: 12) {
+                    Spacer(minLength: 0)
+                    EndActions(model: model)
+                }
                 notices
                 Text(Panel.emptyText)
                     .foregroundColor(Theme.dim)
@@ -307,8 +314,18 @@ struct Hero: View {
             if let hint = model.state.launchHint {
                 ActionButton(symbol: model.state.launchOpensApp ? "macwindow" : "terminal", hint: hint, model: model, action: model.actions.openAgent)
             }
-            ActionButton(symbol: "gearshape", hint: "Settings", model: model, action: model.actions.openSettings)
+            EndActions(model: model)
         }
+    }
+}
+
+/// ⚙ and ⏻: last in the header, and on their own in an empty panel.
+struct EndActions: View {
+    @ObservedObject var model: PanelModel
+
+    var body: some View {
+        ActionButton(symbol: "gearshape", hint: "Settings", model: model, action: model.actions.openSettings)
+        ActionButton(symbol: "power", hint: "Quit (q)", model: model, action: model.actions.quit)
     }
 }
 

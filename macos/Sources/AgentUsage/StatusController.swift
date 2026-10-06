@@ -140,7 +140,8 @@ final class StatusController: NSObject, NSWindowDelegate {
         close()
     }
 
-    /// ←/→ (or h/l) switch agents, r refreshes, Esc closes.
+    /// ←/→ (or h/l) switch agents, r refreshes, Esc closes, q (and ⌘Q)
+    /// quits.
     private func handleKey(_ event: NSEvent) -> Bool {
         switch (event.keyCode, event.charactersIgnoringModifiers?.lowercased()) {
         case (53, _):
@@ -151,6 +152,8 @@ final class StatusController: NSObject, NSWindowDelegate {
             model.step(1)
         case (_, "r"?):
             model.runUpdate(.force)
+        case (_, "q"?):
+            NSApp.terminate(nil)
         default:
             return false
         }

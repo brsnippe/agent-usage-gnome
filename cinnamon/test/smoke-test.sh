@@ -2,11 +2,12 @@
 # Run with: cinnamon/test/smoke-test.sh [snapshot folder]
 #
 # The applet in a real Cinnamon on a virtual screen: it has to install, load
-# without errors, show the session limit in the panel, draw its panel, and
-# survive a reinstall. Meant for Linux Mint's Docker images, as a normal user
-# with Cinnamon, Xvfb and a system bus running (cinnamon/test/run-in-mint.sh
-# sets that up). Screenshots and logs go to the snapshot folder,
-# cinnamon/snapshots by default.
+# without errors, show the session limit in the panel, draw its panel, survive
+# a reinstall, and take itself off the panel with its ⏻, keeping its settings
+# for when it's added back. Meant for Linux Mint's Docker images, as a normal
+# user with Cinnamon, Xvfb and a system bus running
+# (cinnamon/test/run-in-mint.sh sets that up). Screenshots and logs go to the
+# snapshot folder, cinnamon/snapshots by default.
 
 set -uo pipefail
 
@@ -45,7 +46,24 @@ check() {
 
 state() { python3 "$ROOT/cinnamon/cinnamon-state.py" "$@"; }
 # JavaScript on the applet, inside Cinnamon.
-applet() { state eval "imports.ui.appletManager.getRunningInstancesForUuid('$UUID')[0]$1"; }
+APPLET="imports.ui.appletManager.getRunningInstancesForUuid('$UUID')[0]"
+applet() { state eval "$APPLET$1"; }
+
+# A button in the panel, by its label or the name screen readers read out;
+# null when there's none.
+button() {
+  echo "(() => {
+      const find = actor => {
+        if (actor.accessible_name === '$1' || actor.get_label?.() === '$1') return actor;
+        for (const child of actor.get_children()) {
+          const found = find(child);
+          if (found) return found;
+        }
+        return null;
+      };
+      return find($APPLET._controller.actor);
+    })()"
+}
 
 # Cinnamon draws the screenshot itself, so it shows exactly what's on screen.
 shot() {
@@ -189,9 +207,9 @@ sleep 2
 check "a left click opens the panel" "$(applet ".menu.isOpen")" "true"
 check "the panel has every section" \
   "$(applet "._controller.actor.get_children().length")" "11"
-check "the header has refresh, open and settings buttons" \
+check "the header has refresh, open, settings and switch-off buttons" \
   "$(applet "._controller.actor.get_children()[0].get_children().map(child => child.accessible_name).filter(Boolean).join(', ')")" \
-  "Refresh now (r), Open OpenCode in env, Settings"
+  "Refresh now (r), Open OpenCode in env, Settings, Switch off (q)"
 check "the panel is in JetBrains Mono" "$(applet "._controller.actor.get_theme_node().get_font().get_family().split(',')[0]")" "JetBrains Mono"
 shot desktop-open
 shot_menu panel-claude
@@ -260,6 +278,38 @@ pkill -f xlet-settings 2>/dev/null
 check "a reinstall succeeds" "$?" "0"
 check "and reloads the applet, which loads again" "$(grep -c 'Reloaded in the panel.' "$OUT/reinstall.log") $(state status)" "1 Loaded"
 check "still on the panel once" "$(gsettings get org.cinnamon enabled-applets | grep -o ":$UUID:" | wc -l)" "1"
+
+# ---- ⏻ asks, then takes it off the panel, until it's added back
+applet ".on_applet_clicked()" >/dev/null
+sleep 1
+state eval "$(button 'Switch off (q)').emit('clicked', 1)" >/dev/null
+sleep 0.5
+check "⏻ asks first, in a card under the header" \
+  "$(state eval "$APPLET._controller.actor.get_children()[1] === $(button 'Cancel').get_parent().get_parent() && $(button 'Switch off') !== null")" "true"
+shot_menu panel-switch-off
+state eval "$(button 'Cancel').emit('clicked', 1)" >/dev/null
+sleep 0.5
+check "Cancel takes the card away and leaves the panel open" "$(state eval "($(button 'Cancel') === null) + ' ' + $APPLET.menu.isOpen")" "true true"
+applet "._controller.handleKey(imports.gi.Clutter.KEY_q)" >/dev/null
+sleep 0.5
+check "q asks too, with the focus on Switch off" "$(state eval "global.stage.get_key_focus() === $(button 'Switch off')")" "true"
+state eval "$(button 'Switch off').emit('clicked', 1)" >/dev/null
+for _ in $(seq 20); do
+  [[ $(gsettings get org.cinnamon enabled-applets | grep -c ":$UUID:") == 0 ]] && break
+  sleep 0.25
+done
+check "Switch off takes it off the panel, as Cinnamon's Remove does" \
+  "$(gsettings get org.cinnamon enabled-applets | grep -o ":$UUID:" | wc -l) $(state eval "imports.ui.appletManager.getRunningInstancesForUuid('$UUID').length")" "0 0"
+check "and keeps its settings" "$(jq -r '.terminal.value' "$settings")" "custom"
+# Back, as Applets in System Settings adds it: a new instance on the panel.
+next=$(gsettings get org.cinnamon next-applet-id | grep -oE '[0-9]+')
+gsettings set org.cinnamon next-applet-id "$((next + 1))"
+gsettings set org.cinnamon enabled-applets "$(gsettings get org.cinnamon enabled-applets | sed -E "s/]\$/, 'panel1:right:0:$UUID:$next']/")"
+for _ in $(seq 20); do
+  [[ $(applet "._controller.launchSettings().terminal" 2>/dev/null) == custom ]] && break
+  sleep 0.5
+done
+check "added back, it loads with the same settings" "$(state status) $(applet "._controller.launchSettings().terminal")" "Loaded custom"
 
 # ---- nothing went wrong along the way
 state log >"$OUT/applet-log.txt" 2>&1

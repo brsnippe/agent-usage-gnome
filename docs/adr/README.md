@@ -90,6 +90,7 @@ It was built iteratively with an AI coding agent: Claude Opus 5.5, running in
 | [0029](0029-installing-on-cinnamon.md) | Installing on Cinnamon, without logging out | Accepted |
 | [0030](0030-testing-in-real-shells.md) | Test the panels in real shells, in Docker | Accepted |
 | [0031](0031-session-colors.md) | Session colors: the robot says when an agent wants you | Accepted |
+| [0032](0032-switching-it-off.md) | Switching it off: ⏻ in the panel | Accepted |
 
 ## Open items
 
@@ -140,3 +141,8 @@ It was built iteratively with an AI coding agent: Claude Opus 5.5, running in
   - Claude Code in Claude's desktop app, and OpenCode's desktop app;
   - the hooks on a Mac, with the Command Line Tools' Python.
 - **Codex** has no session colors ([0031](0031-session-colors.md)).
+- **⏻ hasn't been clicked on a coworker's machine yet**
+  ([0032](0032-switching-it-off.md)). The containers click it with a
+  signal; a real click, the notification on screen, and getting it back
+  through the Extensions app or Mint's Applets list are still to be seen.
+  The Mac's ⏻ has only been drawn, in the snapshots.

@@ -3,8 +3,9 @@
 #
 # The GNOME extension in a real GNOME Shell, headless: it has to install, load
 # without errors, stay out of the top bar until there's usage, show the
-# session limit, draw its panel, and open the agent on a right click. Meant
-# for Ubuntu's Docker images, as a normal user with a system bus and logind
+# session limit, draw its panel, open the agent on a right click, and switch
+# itself off with the panel's ⏻ until it's switched back on. Meant for
+# Ubuntu's Docker images, as a normal user with a system bus and logind
 # (test/gnome/prepare-ubuntu.sh sets that up). Screenshots and logs go to the
 # snapshot folder, test/gnome/snapshots by default.
 #
@@ -92,6 +93,22 @@ shot_menu() {
   shot_actor "$1" "$INDICATOR.menu.actor"
 }
 
+# A button in the panel, by its label or the name screen readers read out;
+# null when there's none.
+button() {
+  echo "(() => {
+      const find = actor => {
+        if (actor.accessible_name === '$1' || actor.get_label?.() === '$1') return actor;
+        for (const child of actor.get_children()) {
+          const found = find(child);
+          if (found) return found;
+        }
+        return null;
+      };
+      return find($INDICATOR._controller.actor);
+    })()"
+}
+
 # A session file, as the agents' hooks write it.
 SESSIONS="${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/agents/sessions"
 session_file() {
@@ -175,9 +192,9 @@ shell "$INDICATOR.menu.open()" >/dev/null
 sleep 2
 check "the panel opens" "$(shell "$INDICATOR.menu.isOpen")" "true"
 check "the panel has every section" "$(shell "$INDICATOR._controller.actor.get_children().length")" "11"
-check "the header has refresh, open and settings buttons" \
+check "the header has refresh, open, settings and switch-off buttons" \
   "$(shell "$INDICATOR._controller.actor.get_children()[0].get_children().map(child => child.accessible_name).filter(Boolean).join(', ')")" \
-  "Refresh now (r), Open OpenCode in env, Settings"
+  "Refresh now (r), Open OpenCode in env, Settings, Switch off (q)"
 check "the panel is in JetBrains Mono" "$(shell "$INDICATOR._controller.actor.get_theme_node().get_font().get_family().split(',')[0]")" "JetBrains Mono"
 shot desktop-open
 shot_menu panel-claude
@@ -227,6 +244,39 @@ for _ in $(seq 20); do
   sleep 0.25
 done
 check "a right click opens the agent, in the terminal from the settings" "$([[ -f $OUT/opened ]] && echo opened)" "opened"
+
+# ---- ⏻ asks, then switches the extension off until it's switched back on
+shell "$INDICATOR.menu.open()" >/dev/null
+sleep 1
+shell "$(button 'Switch off (q)').emit('clicked', 1)" >/dev/null
+sleep 0.5
+check "⏻ asks first, in a card under the header" \
+  "$(shell "$INDICATOR._controller.actor.get_children()[1] === $(button 'Cancel').get_parent().get_parent() && $(button 'Switch off') !== null")" "true"
+shot_menu panel-switch-off
+shell "$(button 'Cancel').emit('clicked', 1)" >/dev/null
+sleep 0.5
+check "Cancel takes the card away and leaves the panel open" "$(shell "($(button 'Cancel') === null) + ' ' + $INDICATOR.menu.isOpen")" "true true"
+shell "$INDICATOR._controller.handleKey(imports.gi.Clutter.KEY_q)" >/dev/null
+sleep 0.5
+check "q asks too, with the focus on Switch off" "$(shell "global.stage.get_key_focus() === $(button 'Switch off')")" "true"
+shell "$(button 'Switch off').emit('clicked', 1)" >/dev/null
+for _ in $(seq 20); do
+  [[ $(shell "Main.extensionManager.lookup('$UUID').state") == 2 ]] && break
+  sleep 0.25
+done
+check "Switch off switches the extension off, and the robot goes" \
+  "$(shell "Main.extensionManager.lookup('$UUID').state + ' ' + ('$UUID' in Main.panel.statusArea)")" "2 false"
+check "as the Extensions app would, so it stays off at the next login" \
+  "$(gsettings get org.gnome.shell disabled-extensions | grep -c "'$UUID'")" "1"
+check "a notification says how to switch it back on" \
+  "$(shell "Main.messageTray.getSources().flatMap(source => source.notifications).some(n => n.title === 'Agent usage' && String(n.body).includes('gnome-extensions enable $UUID'))")" "true"
+gnome-extensions enable "$UUID"
+for _ in $(seq 20); do
+  [[ $(shell "Main.panel.statusArea['$UUID']?.visible === true") == true ]] && break
+  sleep 0.25
+done
+check "gnome-extensions enable brings it back" \
+  "$(shell "Main.extensionManager.lookup('$UUID').state + ' ' + $INDICATOR.visible")" "1 true"
 
 # ---- nothing went wrong along the way
 check "GNOME Shell logged no JavaScript errors" "$(grep -c 'JS ERROR' "$OUT/gnome-shell.log")" "0"

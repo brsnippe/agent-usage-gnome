@@ -76,6 +76,8 @@ final class AppModel {
             refresh: { [weak self] in self?.runUpdate(.force) },
             openAgent: { [weak self] in self?.launchAgent() },
             openSettings: { [weak self] in self?.onOpenSettings?() },
+            // Easy to undo on a Mac: it starts again at login, or from Spotlight.
+            quit: { NSApp.terminate(nil) },
             select: { [weak self] in self?.select($0) },
             footer: { [weak self] in self?.onOpenSettings?() },
             signIn: { [weak self] in self?.signIn($0, $1) },

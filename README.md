@@ -15,8 +15,9 @@ icon: see [macOS](#macos).
   session waits for you, and green once one has finished its turn. See
   [Session colors](#session-colors).
 - **Panel:**
-  - **Header:** the agent's logo, name and plan, with refresh, *Open agent*
-    and ⚙ settings buttons.
+  - **Header:** the agent's logo, name and plan, with refresh, *Open agent*,
+    ⚙ settings and ⏻ buttons. ⏻ switches it off: see
+    [Switching it off](#switching-it-off).
   - **Tabs:** one per agent, if you have more than one.
   - **Problem card:** shows up when something needs fixing (sign-in,
     missing CLI). When the sign-in is the problem, its buttons fix it: see
@@ -39,7 +40,7 @@ icon: see [macOS](#macos).
 - **Mouse:** left-click opens the panel, middle-click refreshes, right-click
   opens your agent (OpenCode by default) in a terminal, or a desktop app.
 - **Keyboard (panel open):** ←/→ (or h/l) switches agent, `r` refreshes,
-  Esc closes.
+  `q` does what ⏻ does, Esc closes.
 
 ## Linux Mint
 
@@ -79,6 +80,8 @@ It clones and installs as on GNOME (see [Install](#install)), and then:
 - **Updates:** *vX.Y.Z available* in the bottom line runs
   `agent-usage update` in your terminal. Cinnamon reloads the applet when
   it's done.
+- **⏻** takes the applet off the panel, after asking. See
+  [Switching it off](#switching-it-off).
 
 The `agent-usage` commands are the same as on GNOME (see [Update](#update)).
 
@@ -140,6 +143,8 @@ xattr -dr com.apple.quarantine "Agent Usage.app"
   The keys are the same as on GNOME.
 - **Settings:** the panel's ⚙ button, or open Agent Usage again from Finder or
   Spotlight. The options are GNOME's, plus *Start at login* and *Quit*.
+- **Quitting:** the panel's ⏻ button, `q` or ⌘Q quits right away. See
+  [Switching it off](#switching-it-off).
 - **Terminals:** *Automatic* means Terminal. You can also pick iTerm2,
   Ghostty, Kitty, Alacritty or WezTerm, or write a custom command such as
   `open -na Ghostty --args -e {command}`. The agent starts in your login
@@ -332,6 +337,25 @@ signed in*. The problem card offers the fix:
 - **Afterwards:** the panel checks that agent's limits every 15 seconds,
   for up to 5 minutes, until the problem is gone. There's no need to
   refresh by hand.
+
+## Switching it off
+
+The panel's ⏻ button, or `q` while the panel is open, stops Agent Usage: no
+more checks, and the robot leaves the top bar. It's there in an empty panel
+too.
+
+| | ⏻ | Back on |
+|---|---|---|
+| **GNOME** | Asks, then switches the extension off, as the Extensions app does | The Extensions app, or `gnome-extensions enable agent-usage@local`. An update switches it back on too |
+| **Linux Mint** | Asks, then takes the applet off the panel, as Cinnamon's *Remove* does | Right-click the panel, *Applets*, then add *Agent Usage*. An update leaves it off |
+| **Mac** | Quits right away | At the next login, or open Agent Usage from Spotlight or Finder |
+
+- **It stays off** on GNOME and Mint, also after you log in again. A
+  notification says how to switch it back on.
+- **Nothing is lost:** your settings and usage data are kept.
+- **The session colors' hooks stay** in Claude Code and OpenCode, writing
+  their small files for when the panel is back. `agent-usage uninstall` takes
+  them out.
 
 ## Install
 

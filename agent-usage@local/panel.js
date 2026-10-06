@@ -19,6 +19,9 @@
 //   closeMenu(), isMenuOpen(), keepFocus(), scrollToTop()
 //   openSettings()        the settings window
 //   openUpdate()          what clicking "vX.Y.Z available" does
+//   quitPrompt()          what the ⏻ button asks before switching off
+//   quit()                switch off: GNOME's extension, Cinnamon's applet,
+//                         until switched back on
 //   notify(text)
 //   openApp(desktopId)    bring a desktop app forward, or start it
 //   spawn(argv)
@@ -187,6 +190,8 @@ export class PanelController {
         this._countdowns = [];
         this._footer = null;
         this._hoverText = null;
+        this._confirmingQuit = false;
+        this._quitButton = null;
         this._queue = new UpdateQueue();
         this._cancellable = new Gio.Cancellable();
         this._sources = new Set();
@@ -336,6 +341,11 @@ export class PanelController {
         } else {
             this._tickId = this._removeSource(this._tickId);
             this._hoverText = null;
+            // Closing the panel answers the ⏻ question with no.
+            if (this._confirmingQuit) {
+                this._confirmingQuit = false;
+                this._buildPanel();
+            }
             this._showFooter();
         }
     }
@@ -344,6 +354,10 @@ export class PanelController {
     handleKey(key) {
         if (key === Clutter.KEY_r || key === Clutter.KEY_R) {
             this._runUpdate('force');
+            return true;
+        }
+        if (key === Clutter.KEY_q || key === Clutter.KEY_Q) {
+            this._askQuit();
             return true;
         }
         if (this._providers.length > 1) {
@@ -671,6 +685,14 @@ export class PanelController {
         this._host.scrollToTop();
     }
 
+    // ⏻ and `q`. Switching off takes more than a click to undo, so the panel
+    // asks first, in a card under the header.
+    _askQuit() {
+        this._confirmingQuit = true;
+        this._buildPanel();
+        this._host.scrollToTop();
+    }
+
     // ------------------------------------------------------------ view
 
     _render() {
@@ -697,18 +719,34 @@ export class PanelController {
     }
 
     _buildPanel() {
+        // Cinnamon closes a menu whose keyboard focus goes away, as it would
+        // with a button about to be rebuilt (Switch off has it, for one).
+        const focus = this.actor.get_stage()?.get_key_focus();
+        if (focus && this.actor.contains(focus))
+            this.actor.grab_key_focus();
         this.actor.destroy_all_children();
         this._countdowns = [];
         this._footer = null;
         this._hoverText = null;
+        this._quitButton = null;
 
         const record = this._providers.find(candidate => String(candidate.id) === this._selectedId);
         if (!record) {
+            // The robot can be there without usage (always on Cinnamon, and on
+            // GNOME while a session wants you), so an empty panel keeps ⚙ and ⏻.
+            const actions = new St.BoxLayout({style_class: 'agent-usage-hero', x_align: Clutter.ActorAlign.END});
+            this._endActions(actions);
+            this.actor.add_child(actions);
+            if (this._confirmingQuit)
+                this.actor.add_child(this._quitCard());
             this.actor.add_child(wrappingLabel("No AI coding subscriptions found.\nAgents show up here once you've used them.", 'agent-usage-empty'));
+            this._focus();
             return;
         }
 
         this.actor.add_child(this._hero(record));
+        if (this._confirmingQuit)
+            this.actor.add_child(this._quitCard());
         if (this._providers.length > 1)
             this.actor.add_child(this._tabs());
 
@@ -756,9 +794,16 @@ export class PanelController {
         this.actor.add_child(this._footer);
         this._showFooter();
         this._updateCountdowns();
-        // Rebuilding destroys whatever had keyboard focus; the host hands it
-        // back to the menu so ←/→ and r keep working while the panel is open.
+        this._focus();
+    }
+
+    // Rebuilding destroys whatever had keyboard focus; the host hands it back
+    // to the menu so ←/→ and r keep working while the panel is open. With the
+    // ⏻ card up, Switch off takes it, so `q` and then Enter switch off.
+    _focus() {
         this._host.keepFocus();
+        if (this._quitButton && this._host.isMenuOpen())
+            this._quitButton.grab_key_focus();
     }
 
     _logo(id) {
@@ -802,11 +847,41 @@ export class PanelController {
                 this.launchAgent();
             }));
         }
-        hero.add_child(this._action('preferences-system-symbolic', 'Settings', () => {
+        this._endActions(hero);
+        return hero;
+    }
+
+    // ⚙ and ⏻: last in the header, and on their own in an empty panel.
+    _endActions(box) {
+        box.add_child(this._action('preferences-system-symbolic', 'Settings', () => {
             this._host.closeMenu();
             this._host.openSettings();
         }));
-        return hero;
+        box.add_child(this._action('system-shutdown-symbolic', 'Switch off (q)', () => this._askQuit()));
+    }
+
+    // What switching off means here, and the two answers.
+    _quitCard() {
+        const card = new St.BoxLayout({vertical: true, style_class: 'agent-usage-status', x_expand: true});
+        card.add_child(wrappingLabel(this._host.quitPrompt(), 'agent-usage-status-text'));
+        const row = new St.BoxLayout({style_class: 'agent-usage-status-actions'});
+        const answer = (text, callback) => {
+            const button = new St.Button({label: text, style_class: 'agent-usage-status-button', can_focus: true, track_hover: true});
+            button.connect('clicked', callback);
+            row.add_child(button);
+            return button;
+        };
+        this._quitButton = answer('Switch off', () => {
+            this._confirmingQuit = false;
+            this._host.closeMenu();
+            this._host.quit();
+        });
+        answer('Cancel', () => {
+            this._confirmingQuit = false;
+            this._buildPanel();
+        });
+        card.add_child(row);
+        return card;
     }
 
     // What's wrong and what to do about it, with buttons when the fix is

@@ -8,6 +8,7 @@
 // panel calls back into.
 
 const Applet = imports.ui.applet;
+const AppletManager = imports.ui.appletManager;
 const Main = imports.ui.main;
 const PopupMenu = imports.ui.popupMenu;
 const Settings = imports.ui.settings;
@@ -28,6 +29,7 @@ const {PanelController} = load('panel');
 const Terminals = load('terminals');
 
 const TERMINAL_SCHEMA = 'org.cinnamon.desktop.default-applications.terminal';
+const ADD_BACK = 'right-click the panel, Applets, then Agent Usage';
 
 // The panel reads its settings the way Gio.Settings offers them (GNOME's);
 // Cinnamon's applet settings get the same face.
@@ -79,6 +81,8 @@ class AgentUsageApplet extends Applet.TextIconApplet {
                 },
                 openSettings: () => this.configureApplet(),
                 openUpdate: () => this.updateNow(),
+                quitPrompt: () => `Take Agent Usage off the panel? It stays off, also after you log in again, until you add it back: ${ADD_BACK}. Your settings are kept.`,
+                quit: () => this._switchOff(),
                 notify: text => Main.notify('Agent usage', text),
                 openApp: desktopId => this._openApp(desktopId),
                 spawn: argv => Util.spawn(argv),
@@ -148,6 +152,14 @@ class AgentUsageApplet extends Applet.TextIconApplet {
         this._controller.destroy();
         this._settings.finalize();
         this.menu.destroy();
+    }
+
+    // ⏻ in the panel: off the panel, as Cinnamon's own Remove does, once the
+    // click is done. An applet that runs only once keeps its settings file
+    // for when it's added back.
+    _switchOff() {
+        Main.notify('Agent usage', `Taken off the panel. To add it back: ${ADD_BACK}.`);
+        AppletManager._removeAppletFromPanel(this._uuid, this.instance_id);
     }
 
     // The settings window's "Try it" button: exactly what the panel's open

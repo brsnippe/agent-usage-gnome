@@ -6,6 +6,7 @@
 
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
@@ -55,6 +56,8 @@ class AgentUsageIndicator extends PanelMenu.Button {
                 openSettings: () => extension.openPreferences(),
                 // The settings window has the Update button.
                 openUpdate: () => extension.openPreferences(),
+                quitPrompt: () => 'Switch Agent Usage off? It stays off, also after you log in again, until you switch it back on in the Extensions app.',
+                quit: () => this._switchOff(extension.uuid),
                 notify: text => Main.notify('Agent usage', text),
                 openApp: desktopId => this._openApp(desktopId),
                 spawn: argv => Util.spawn(argv),
@@ -134,6 +137,16 @@ class AgentUsageIndicator extends PanelMenu.Button {
             app.activate();
         else
             Main.notify('Agent usage', `Couldn't open ${desktopId}.`);
+    }
+
+    // ⏻ in the panel: switched off as the Extensions app would, which
+    // destroys this button, so only once the click is done.
+    _switchOff(uuid) {
+        Main.notify('Agent usage', `Switched off. To switch it back on: the Extensions app, or gnome-extensions enable ${uuid}`);
+        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+            Main.extensionManager.disableExtension(uuid);
+            return GLib.SOURCE_REMOVE;
+        });
     }
 });
 
