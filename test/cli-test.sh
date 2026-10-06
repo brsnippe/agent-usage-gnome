@@ -51,7 +51,7 @@ mkdir -p "$T/stubs" "$T/settings" "$T/home"
 printf '#!/bin/bash\necho "GNOME Shell 46.0"\n' >"$T/stubs/gnome-shell"
 cat >"$T/stubs/gsettings" <<EOF
 #!/bin/bash
-store="$T/settings"
+store="\${STUB_SETTINGS:-$T/settings}"
 [[ \$1 == --schemadir ]] && exit 0
 case \$1 in
   get) if [[ -f \$store/\$3 ]]; then cat "\$store/\$3"; elif [[ \$3 == disable-user-extensions ]]; then echo false; else echo "@as []"; fi ;;
@@ -60,6 +60,9 @@ esac
 EOF
 printf '#!/bin/bash\nexit 0\n' >"$T/stubs/gnome-extensions"
 printf '#!/bin/bash\nprintf "install ok installed"\n' >"$T/stubs/dpkg-query"
+# Linux Mint's: Cinnamon, and its D-Bus interface, which only records calls.
+printf '#!/bin/bash\necho "Cinnamon 6.6.4"\n' >"$T/stubs/cinnamon"
+printf '#!/bin/bash\necho "$*" >>"%s"\n' "$T/gdbus.log" >"$T/stubs/gdbus"
 chmod +x "$T/stubs"/*
 
 H="$T/home"
@@ -121,10 +124,68 @@ check "uninstall succeeds" "$?" "0"
 check "and removes the extension, the clone and the command" \
   "$([[ -e $EXT ]] && echo ext) $([[ -e $CLONE ]] && echo clone) $([[ -L $CLI ]] && echo cli)" "  "
 
+# --- Linux Mint: the same get.sh in a Cinnamon session installs the applet
+M="$T/mint"
+MS="$T/mint-settings"
+mkdir -p "$M" "$MS"
+MINT_PANEL="'panel1:left:0:menu@cinnamon.org:0', 'panel1:right:0:systray@cinnamon.org:3', 'panel1:right:1:xapp-status@cinnamon.org:4', 'panel1:right:2:calendar@cinnamon.org:12'"
+echo "[$MINT_PANEL]" >"$MS/enabled-applets"
+echo 42 >"$MS/next-applet-id"
+mint() {
+  env HOME="$M" XDG_DATA_HOME="$M/.local/share" XDG_CONFIG_HOME="$M/.config" XDG_STATE_HOME="$M/.local/state" \
+    XDG_CACHE_HOME="$M/.cache" XDG_CURRENT_DESKTOP=X-Cinnamon XDG_SESSION_TYPE=x11 STUB_SETTINGS="$MS" \
+    PATH="$T/stubs:$PATH" AGENT_USAGE_REPO="$T/remote.git" "$@"
+}
+APPLET="$M/.local/share/cinnamon/applets/agent-usage@local"
+MCLONE="$M/.local/share/agent-usage-gnome"
+MCLI="$M/.local/bin/agent-usage"
+applet_version() { jq -r '.version' "$APPLET/metadata.json" 2>/dev/null; }
+
+mint bash "$ROOT/get.sh" >"$T/mint-get.log" 2>&1
+check "on Cinnamon, get.sh succeeds" "$?" "0"
+check "it installs the applet, not the extension" \
+  "$(applet_version) $([[ -e $M/.local/share/gnome-shell ]] && echo extension)" "0.6.1 "
+check "the applet knows where it came from" "$(cat "$APPLET/source" 2>/dev/null)" "$MCLONE"
+check "it's built: Cinnamon's files, the converted modules, the collectors" \
+  "$(cd "$APPLET" 2>/dev/null && ls applet.js bin/agent-usage-claude panel.js settings-schema.json usage.js 2>&1 | tr '\n' ' ')" \
+  "applet.js bin/agent-usage-claude panel.js settings-schema.json usage.js "
+check "its settings window shows the version" "$(jq -r '.version.description' "$APPLET/settings-schema.json" 2>/dev/null)" \
+  "Version: v0.6.1. The panel's bottom line says when a newer one is out."
+check "a first install adds it to the panel, first in the zone with the status icons" "$(cat "$MS/enabled-applets")" \
+  "[$MINT_PANEL, 'panel1:right:-1:agent-usage@local:42']"
+check "with the next free instance id" "$(cat "$MS/next-applet-id")" "43"
+check "agent-usage version reads the applet's version" "$(mint "$MCLI" version | head -1)" "installed: 0.6.1"
+check "diagnose reports on the applet" "$(mint "$MCLI" diagnose 2>&1 | grep '^installed:')" "installed: yes, version 0.6.1"
+
+release 0.6.2
+: >"$T/gdbus.log"
+mint "$MCLI" update >"$T/mint-update.log" 2>&1
+check "on Cinnamon, update installs the new release" "$(applet_version)" "0.6.2"
+check "and has Cinnamon reload the applet, without a logout" "$(grep -c 'org.Cinnamon.ReloadXlet agent-usage@local APPLET' "$T/gdbus.log")" "1"
+check "without adding it to the panel a second time" "$(grep -o 'agent-usage@local' "$MS/enabled-applets" | wc -l)" "1"
+
+echo "[$MINT_PANEL]" >"$MS/enabled-applets"
+: >"$T/gdbus.log"
+mint "$MCLI" update --reinstall >/dev/null 2>&1
+check "an update leaves an applet someone took off the panel off it" \
+  "$(grep -c 'agent-usage@local' "$MS/enabled-applets") $(grep -c ReloadXlet "$T/gdbus.log")" "0 0"
+
+echo "[$MINT_PANEL, 'panel1:right:-1:agent-usage@local:43']" >"$MS/enabled-applets"
+mkdir -p "$M/.config/cinnamon/spices/agent-usage@local"
+echo '{}' >"$M/.config/cinnamon/spices/agent-usage@local/43.json"
+mint "$MCLI" uninstall --purge >"$T/mint-uninstall.log" 2>&1
+check "on Cinnamon, uninstall succeeds" "$?" "0"
+check "and takes the applet off the panel" "$(cat "$MS/enabled-applets")" "[$MINT_PANEL]"
+check "and removes the applet, its settings, the clone and the command" \
+  "$([[ -e $APPLET ]] && echo applet) $([[ -e $M/.config/cinnamon/spices/agent-usage@local ]] && echo settings) $([[ -e $MCLONE ]] && echo clone) $([[ -L $MCLI ]] && echo cli)" \
+  "   "
+
 if ((failures)); then
   echo
   echo "--- get.log"; cat "$T/get.log"
   echo "--- update.log"; cat "$T/update.log"
+  echo "--- mint-get.log"; cat "$T/mint-get.log"
+  echo "--- mint-update.log"; cat "$T/mint-update.log"
   echo
   echo "$failures failed"
   exit 1

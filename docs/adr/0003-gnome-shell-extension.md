@@ -61,6 +61,8 @@ manage. The target laptop runs GNOME 46 (Ubuntu 24.04).
 - **GNOME upgrades:** a new major version may need an entry in
   `shell-version`, or API fixes.
 - **The font:** on Ubuntu the panel renders in the system font instead of
-  JetBrains Mono. That was noticed and left as is.
+  JetBrains Mono. That was noticed and left as is. (Fixed in v0.11.0: St
+  dropped the whole `font-family` list over a quoted second name, see
+  [0030](0030-testing-in-real-shells.md).)
 - **Testing:** this code can't run on the development machine, which has no
   GNOME Shell ([0017](0017-testing-without-gnome-shell.md)).

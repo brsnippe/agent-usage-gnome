@@ -1,7 +1,8 @@
 #!/bin/bash
 # Install Agent Usage for GNOME from git: clone it into
 # ~/.local/share/agent-usage-gnome, check out the newest release, and run
-# install.sh. Afterwards, `agent-usage update` keeps it current.
+# install.sh. Afterwards, `agent-usage update` keeps it current. On Linux
+# Mint, install.sh installs the Cinnamon applet instead.
 #
 #   curl -fsSL https://raw.githubusercontent.com/brsnippe/agent-usage-gnome/main/get.sh | bash
 #

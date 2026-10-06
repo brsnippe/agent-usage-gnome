@@ -1,10 +1,12 @@
-# Agent Usage for GNOME and macOS
+# Agent Usage for GNOME, Cinnamon and macOS
 
 Omarchy's **Agents** panel as a GNOME Shell extension, in Omarchy's Kanagawa
 look. It shows Claude Code and Codex rate limits with reset countdowns, plus
 tokens by day and by model. That includes sessions you ran in **OpenCode v2**.
 
-On a Mac it's the same panel under a menu bar icon: see [macOS](#macos).
+On Linux Mint it's the same panel as a Cinnamon applet: see
+[Linux Mint](#linux-mint). On a Mac it's the same panel under a menu bar
+icon: see [macOS](#macos).
 
 - **Top bar:** a robot icon with your fullest limit (`61%`). It turns red at
   90% or more. It stays hidden until an agent has usage to show. See
@@ -35,6 +37,56 @@ On a Mac it's the same panel under a menu bar icon: see [macOS](#macos).
   opens your agent (OpenCode by default) in a terminal, or a desktop app.
 - **Keyboard (panel open):** ←/→ (or h/l) switches agent, `r` refreshes,
   Esc closes.
+
+## Linux Mint
+
+The same panel as a Cinnamon applet, for Mint's default edition: Cinnamon
+6.0 and up, so Mint 21.3, 22.x and LMDE 6 and 7. Mint's MATE and Xfce
+editions aren't covered.
+
+### Install on Linux Mint
+
+The same line as on GNOME:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/brsnippe/agent-usage-gnome/main/get.sh | bash
+```
+
+It clones and installs as on GNOME (see [Install](#install)), and then:
+
+- puts the robot in the panel, at the right, next to the status icons;
+- loads it right away. There's no logging out, also not after an update:
+  Cinnamon reloads the applet in place.
+
+### What's different from GNOME
+
+- **The robot is always in the panel,** as on a Mac, even before there's
+  usage to show. The open panel says why it's empty.
+- **Clicks are GNOME's:** left opens the panel, middle refreshes, right opens
+  your agent. In panel edit mode, right-click shows Cinnamon's own menu
+  instead, to move or remove the applet.
+- **On a vertical panel** only the robot shows, without the percentage.
+- **Settings:** the panel's ⚙ button, or System Settings → Applets →
+  Agent Usage. It's Cinnamon's own settings window with GNOME's options, plus
+  *Try it* and *Update now* buttons.
+- **Terminals:** *Automatic* means the terminal from System Settings →
+  Preferred Applications (GNOME Terminal on a new Mint), then GNOME's list.
+- **Locked screen:** the applet pauses its checks until the screen is
+  unlocked, then refreshes, as GNOME does.
+- **Updates:** *vX.Y.Z available* in the bottom line runs
+  `agent-usage update` in your terminal. Cinnamon reloads the applet when
+  it's done.
+
+The `agent-usage` commands are the same as on GNOME (see [Update](#update)).
+
+### Where things are on Linux Mint
+
+| What | Where |
+|---|---|
+| The applet | `~/.local/share/cinnamon/applets/agent-usage@local/` |
+| Settings | `~/.config/cinnamon/spices/agent-usage@local/` |
+| Usage records | `~/.local/state/omarchy/agents/usage/`, as on GNOME |
+| Log | Cinnamon's; `agent-usage diagnose` shows the applet's lines |
 
 ## macOS
 
@@ -142,7 +194,8 @@ away.
     measured.
 - **Full rescans** can run every 5 to 60 minutes.
 - **No checks while locked:** GNOME switches extensions off while the screen
-  is locked, so nothing runs while you're away.
+  is locked, so nothing runs while you're away. On Cinnamon the applet pauses
+  itself.
 
 ## Which limit the top bar shows
 
@@ -229,8 +282,9 @@ signed in*. The problem card offers the fix:
 
 ## Install
 
-This and the next sections are about GNOME; on a Mac, see
-[Install on a Mac](#install-on-a-mac).
+This and the next sections are about GNOME. Linux Mint uses the same
+commands; what's different there is under [Linux Mint](#linux-mint). On a
+Mac, see [Install on a Mac](#install-on-a-mac).
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/brsnippe/agent-usage-gnome/main/get.sh | bash
@@ -321,7 +375,8 @@ Later on, the panel's problem card has buttons for that
 
 Run `agent-usage diagnose` (or `./diagnose.sh`) and paste its output. It shows the GNOME version, whether
 the extension loaded or failed, the usage records and the extension's lines
-from the GNOME Shell log.
+from the GNOME Shell log. On Linux Mint it shows the same for Cinnamon and
+the applet, including its settings and where it sits in the panel.
 
 ## How it works
 
@@ -335,7 +390,8 @@ The extension lives in `agent-usage@local/`:
 | `bin/agent-usage-claude` | Claude Code limits (Anthropic's usage endpoint) and token stats. The stats come from `~/.claude/projects` plus OpenCode sessions on the `anthropic` provider |
 | `bin/agent-usage-codex` | Codex limits (`codex app-server`) and token stats. The stats come from Codex sessions plus OpenCode sessions on the `openai` provider |
 | `bin/agent-usage-update` | Runs the collectors and writes one JSON file per agent to `~/.local/state/omarchy/agents/usage/`. It's also on your PATH, so `agent-usage-update --force` collects again by hand |
-| `extension.js`, `usage.js`, `updates.js`, `stylesheet.css` | The top-bar button and panel. They schedule the updater and display those JSON files |
+| `panel.js`, `usage.js`, `updates.js`, `stylesheet.css` | The panel. It schedules the updater and displays those JSON files. The Cinnamon applet uses the same files |
+| `extension.js` | GNOME's top-bar button and the menu around the panel |
 | `terminals.js` | Which agent or desktop app to open, how to start each terminal, and the sign-in commands. The panel and the settings window both use it |
 | `versions.js` | Compares release versions for the update notice |
 | `prefs.js`, `schemas/` | The settings window and its settings: the refresh intervals, which limit the top bar shows, the agent, the terminal and update checks |
@@ -346,10 +402,25 @@ Around it, in the repository:
 |---|---|
 | `get.sh` | First install from git |
 | `bin/agent-usage` | `update`, `version`, `latest`, `diagnose`, `uninstall` |
-| `install.sh`, `uninstall.sh`, `diagnose.sh`, `preview.sh` | Install, remove, debug and preview the extension |
+| `install.sh`, `uninstall.sh`, `diagnose.sh`, `preview.sh` | Install, remove, debug and preview the extension. In a Cinnamon session the first three hand over to `cinnamon/` |
+| `scripts/common.sh` | What the GNOME and Cinnamon scripts share |
 | `VERSION`, `CHANGELOG.md`, `scripts/release.sh` | Releases (see [Releasing](#releasing)) |
 | `patches/`, `test/` | The changes to Omarchy's collectors, and the tests |
+| `cinnamon/` | The Cinnamon applet: see below |
 | `macos/` | The macOS app: see below |
+
+The Cinnamon applet lives in `cinnamon/` and is built from the extension's
+panel when it's installed:
+
+| Piece | What it does |
+|---|---|
+| `agent-usage@local/applet.js` | The applet in the panel, its popup, its settings and clicks |
+| `agent-usage@local/settings-schema.json`, `metadata.json`, `stylesheet.css`, `icon.png` | Cinnamon's settings window, the applet's details, Cinnamon's additions to the stylesheet, the icon in System Settings |
+| `build-applet.sh` | Builds the applet: those files, the collectors and icons, the shared stylesheet, and the shared modules rewritten for Cinnamon |
+| `esm-to-cinnamon.py` | Rewrites a shared module (an ES module) into the form Cinnamon loads |
+| `install.sh`, `uninstall.sh`, `diagnose.sh` | Install, remove and debug the applet |
+| `cinnamon-state.py` | Asks the running Cinnamon whether the applet loaded, and for its log lines |
+| `test/` | The smoke test in Linux Mint's Docker images |
 
 The macOS app lives in `macos/` and bundles the same two collectors:
 
@@ -432,24 +503,40 @@ The script:
 - writes `VERSION`, commits, tags `vX.Y.Z` and pushes;
 - creates the GitHub release with that changelog section as its notes.
 
-GitHub Actions runs the same tests on every push and checks that a release
-tag matches `VERSION`. On a release tag it also builds the macOS app and
+GitHub Actions runs the same tests on every push, plus the smoke tests in
+real shells, and checks that a release tag matches `VERSION`. On a release tag it also builds the macOS app and
 attaches `Agent-Usage-macOS.zip` to the release, which is what `get.sh`
 installs on a Mac. Installs see the release the next time someone runs
 `agent-usage update`, or the next time their panel checks.
 
-Tests, all without GNOME:
+Tests without GNOME or Cinnamon:
 
 ```bash
-for t in test/*-test.js; do gjs -m "$t"; done   # panel logic
+for t in test/*-test.js; do gjs -m "$t"; done   # panel logic, the modules and settings for Cinnamon
 python3 test/claude-limits-test.py              # Claude limits back-off, refused sign-in
 python3 test/claude-keychain-test.py            # Claude sign-in from the macOS Keychain
 python3 test/codex-sign-in-test.py              # Codex signed out, with a fake app server
-test/cli-test.sh                                # install, update, uninstall from git
+test/cli-test.sh                                # install, update, uninstall from git, on GNOME and Mint
 (cd macos && swift test)                        # the macOS app's logic, on Linux too
 ```
 
-On every push and pull request, a macOS job on GitHub also:
+Smoke tests in real shells, with Docker. Each installs the panel, fills it
+from a stand-in collector, clicks through it from inside the shell, and saves
+screenshots under `test/gnome/snapshots/` or `cinnamon/snapshots/`:
+
+```bash
+test/gnome/run-in-ubuntu.sh 24.04               # headless GNOME Shell 46 (26.04: GNOME 50)
+cinnamon/test/run-in-mint.sh mint22.3           # Cinnamon 6.6 (mint21.3: 6.0; mint22.3-loader6.8: 6.8's applet loading)
+```
+
+The first run of each installs the shell into an image and keeps it, so
+later runs take seconds. See [0030](docs/adr/0030-testing-in-real-shells.md).
+
+On every push and pull request, GitHub also runs the smoke tests: GNOME 46
+and 50, and Mint 21.3, 22.3 and 22.3 with Cinnamon 6.8's applet loading. The
+screenshots are kept as artifacts.
+
+A macOS job on GitHub also:
 - builds the app;
 - draws the panel to PNGs, kept as the `snapshots` artifact;
 - starts the app and waits for the collectors' records;

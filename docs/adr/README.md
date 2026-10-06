@@ -31,6 +31,12 @@ Then coworkers with MacBooks wanted the same panel, which became a native
 macOS menu bar app in `macos/` ([0018](0018-native-macos-app.md)), built and
 tested without a Mac at hand ([0022](0022-testing-the-macos-app.md)).
 
+Coworkers on Linux Mint came next. Mint's default desktop is Cinnamon, a
+GNOME Shell fork, so the panel became a Cinnamon applet in `cinnamon/`
+([0027](0027-cinnamon-applet-for-linux-mint.md)). It shares its code with the
+GNOME extension ([0028](0028-shared-panel-code.md)). Both now run in real
+shells in Docker ([0030](0030-testing-in-real-shells.md)).
+
 ## How it was built
 
 It was built iteratively with an AI coding agent: Claude Opus 5.5, running in
@@ -69,7 +75,7 @@ It was built iteratively with an AI coding agent: Claude Opus 5.5, running in
 | [0014](0014-reloading-gnome-shell.md) | How GNOME Shell picks up new code | Accepted |
 | [0015](0015-distribute-via-git.md) | Distribute via git with `get.sh` and the `agent-usage` command | Accepted |
 | [0016](0016-versions-releases-and-update-check.md) | Versions, releases and the update check | Accepted |
-| [0017](0017-testing-without-gnome-shell.md) | Test without GNOME Shell | Accepted |
+| [0017](0017-testing-without-gnome-shell.md) | Test without GNOME Shell | Accepted, extended by 0030 |
 | [0018](0018-native-macos-app.md) | A native macOS menu bar app | Accepted |
 | [0019](0019-claude-login-from-the-macos-keychain.md) | Read Claude Code's login from the macOS Keychain | Accepted |
 | [0020](0020-opening-the-agent-on-macos.md) | Opening the agent on macOS | Accepted |
@@ -79,6 +85,10 @@ It was built iteratively with an AI coding agent: Claude Opus 5.5, running in
 | [0024](0024-check-for-releases-hourly.md) | Check for releases every hour, and after waking | Accepted |
 | [0025](0025-session-limit-in-the-top-bar.md) | The top bar shows the session limit from 40% | Accepted |
 | [0026](0026-all-time-total.md) | The all-time token total in the All time heading | Accepted |
+| [0027](0027-cinnamon-applet-for-linux-mint.md) | A Cinnamon applet for Linux Mint | Accepted |
+| [0028](0028-shared-panel-code.md) | One panel for GNOME and Cinnamon | Accepted |
+| [0029](0029-installing-on-cinnamon.md) | Installing on Cinnamon, without logging out | Accepted |
+| [0030](0030-testing-in-real-shells.md) | Test the panels in real shells, in Docker | Accepted |
 
 ## Open items
 
@@ -93,8 +103,6 @@ It was built iteratively with an AI coding agent: Claude Opus 5.5, running in
   silent fallback is still there ([0008](0008-rate-limit-back-off-and-stale-limits.md)).
 - **No cross-machine sync of the token charts**
   ([0011](0011-local-token-charts.md)).
-- **The panel's font:** the stylesheet asks for JetBrains Mono, but on Ubuntu
-  the panel renders in the system font. That was left as is.
 - **No `scripts/sync-upstream.sh`.** A script to fetch Omarchy's latest
   collectors and reapply the patches was considered but not built.
 - **The Mac app hasn't run on a coworker's Mac yet.** What the trial has to
@@ -110,5 +118,18 @@ It was built iteratively with an AI coding agent: Claude Opus 5.5, running in
 - **The Mac app isn't notarized.** Browser downloads need the `xattr` line
   until there's an Apple Developer account
   ([0021](0021-install-on-macos-from-the-release-zip.md)).
-- **Two implementations of the panel's logic:** `usage.js` and the Swift
-  port ([0018](0018-native-macos-app.md)).
+- **Two implementations of the panel's logic:** the JavaScript that GNOME
+  and Cinnamon share, and the Swift port ([0018](0018-native-macos-app.md),
+  [0028](0028-shared-panel-code.md)).
+- **The Cinnamon applet hasn't run on a coworker's Mint yet.** The containers
+  ([0030](0030-testing-in-real-shells.md)) can't show:
+  - real clicks and keys, ←/→ in the open panel included;
+  - Mint's themes, light and dark, around the panel;
+  - pausing while the screen is locked, and waking from sleep;
+  - the Update button end to end, and the terminal from Preferred
+    Applications.
+- **Mint 23 (Cinnamon 6.8)** is only tested with 6.8's applet loading on top
+  of 6.6, until its images can install it
+  ([0030](0030-testing-in-real-shells.md)).
+- **Mint's MATE and Xfce editions** aren't covered
+  ([0027](0027-cinnamon-applet-for-linux-mint.md)).

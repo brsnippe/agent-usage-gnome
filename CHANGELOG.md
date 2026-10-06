@@ -3,6 +3,28 @@
 Versions are git tags (`v0.6.0`, …). `agent-usage update` installs the newest
 one.
 
+## 0.11.0
+
+Linux Mint. And JetBrains Mono, on GNOME too.
+
+- **Linux Mint:** the same panel as a Cinnamon applet, for Cinnamon 6.0 and
+  up (Mint 21.3, 22.x, LMDE 6 and 7). The same `get.sh` line installs it,
+  puts the robot in the panel and loads it, without logging out. Updates
+  reload it in place. See the README's *Linux Mint* section.
+  - Clicks as on GNOME: left opens the panel, middle refreshes, right opens
+    your agent.
+  - Settings in Cinnamon's own window (⚙ in the panel, or System Settings →
+    Applets), with GNOME's options plus *Try it* and *Update now*.
+  - *Automatic* opens the terminal from Mint's Preferred Applications.
+- **The panel's font:** it now really is JetBrains Mono, on GNOME as on
+  Cinnamon. GNOME Shell had been ignoring the whole font list because of how
+  its second name was quoted.
+- **Under the hood:** the panel moved from `extension.js` into `panel.js`,
+  which GNOME and Cinnamon share. GNOME's behaviour doesn't change.
+- **Tests:** CI now runs the extension in a real, headless GNOME Shell (46
+  and 50), and the applet in a real Cinnamon on Linux Mint, with screenshots
+  of both.
+
 ## 0.10.0
 
 The all-time token total. On GNOME and on a Mac.

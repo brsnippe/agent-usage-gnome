@@ -1,0 +1,137 @@
+{
+  "layout": {
+    "type": "layout",
+    "pages": ["general"],
+    "general": {
+      "type": "page",
+      "title": "General",
+      "sections": ["refresh", "panel", "launch", "updates"]
+    },
+    "refresh": {
+      "type": "section",
+      "title": "Refresh",
+      "keys": ["refresh-note", "limits-interval", "scan-interval"]
+    },
+    "panel": {
+      "type": "section",
+      "title": "Panel",
+      "keys": ["session-threshold"]
+    },
+    "launch": {
+      "type": "section",
+      "title": "Open agent",
+      "keys": ["launch-note", "agent", "agent-command", "terminal", "terminal-command", "try-launch"]
+    },
+    "updates": {
+      "type": "section",
+      "title": "Updates",
+      "keys": ["version", "check-updates", "update-now"]
+    }
+  },
+  "refresh-note": {
+    "type": "label",
+    "description": "Changes apply right away. The panel also refreshes when you open it, after you unlock the screen, and when the computer wakes from sleep."
+  },
+  "limits-interval": {
+    "type": "spinbutton",
+    "default": 300,
+    "min": 30,
+    "max": 3600,
+    "step": 30,
+    "units": "seconds",
+    "description": "Check limits every",
+    "tooltip": "Keeps the percentage in the panel current; opening the panel always checks right away. Anthropic refuses checks that come too often, and checking then pauses for 1 to 15 minutes."
+  },
+  "scan-interval": {
+    "type": "spinbutton",
+    "default": 15,
+    "min": 5,
+    "max": 60,
+    "step": 1,
+    "units": "minutes",
+    "description": "Rescan local usage every",
+    "tooltip": "Rereads transcripts and OpenCode history for the token charts."
+  },
+  "session-threshold": {
+    "type": "spinbutton",
+    "default": 40,
+    "min": 0,
+    "max": 100,
+    "step": 5,
+    "units": "percent",
+    "description": "Show the session limit from",
+    "tooltip": "Once the 5-hour session limit is this full, the panel shows it, even when the weekly limit is fuller. Below it, the panel shows the fullest limit. 0 always shows the session limit."
+  },
+  "launch-note": {
+    "type": "label",
+    "description": "What the panel's open button, and right-clicking the robot, opens: an agent in a terminal, or a desktop app."
+  },
+  "agent": {
+    "type": "combobox",
+    "default": "opencode",
+    "description": "Agent",
+    "options": {
+      "OpenCode": "opencode",
+      "OpenCode (desktop app)": "opencode-desktop",
+      "Claude Code": "claude",
+      "Claude (desktop app)": "claude-desktop",
+      "Codex": "codex",
+      "Custom…": "custom"
+    }
+  },
+  "agent-command": {
+    "type": "entry",
+    "default": "",
+    "description": "Custom agent command",
+    "tooltip": "For example: claude --continue",
+    "dependency": "agent=custom"
+  },
+  "terminal": {
+    "type": "combobox",
+    "default": "auto",
+    "description": "Terminal",
+    "tooltip": "Automatic uses the terminal from Preferred Applications. Signing in and updating use it too, also with a desktop app.",
+    "options": {
+      "Automatic": "auto",
+      "Ghostty": "ghostty",
+      "GNOME Terminal": "gnome-terminal",
+      "Ptyxis": "ptyxis",
+      "Kitty": "kitty",
+      "Alacritty": "alacritty",
+      "WezTerm": "wezterm",
+      "Foot": "foot",
+      "Konsole": "konsole",
+      "xterm": "xterm",
+      "Custom…": "custom"
+    }
+  },
+  "terminal-command": {
+    "type": "entry",
+    "default": "",
+    "description": "Custom terminal command",
+    "tooltip": "{command} is replaced by the agent's command, e.g. ghostty -e {command}. Without it, the agent goes at the end.",
+    "dependency": "terminal=custom"
+  },
+  "try-launch": {
+    "type": "button",
+    "description": "Try it",
+    "callback": "tryLaunch",
+    "tooltip": "Opens the agent exactly as the panel's open button does."
+  },
+  "version": {
+    "type": "label",
+    "description": "Version: unknown"
+  },
+  "check-updates": {
+    "type": "switch",
+    "default": true,
+    "description": "Check for new versions",
+    "tooltip": "Every hour and after waking from sleep. Asks the git repository this was installed from. The panel says when one is out."
+  },
+  "update-now": {
+    "type": "button",
+    "description": "Update now",
+    "callback": "updateNow",
+    "tooltip": "Runs agent-usage update in your terminal. The applet reloads itself when it's done."
+  }
+}

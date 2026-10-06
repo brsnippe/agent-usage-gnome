@@ -1,15 +1,24 @@
 #!/bin/bash
 # Remove the Agent Usage extension (including earlier builds under their old
 # ids). With --purge, also delete the usage data and caches the collectors
-# wrote, and the extension's settings.
+# wrote, and the extension's settings. In a Cinnamon session, or where only
+# the Cinnamon applet is installed, removes the applet instead.
 
 set -euo pipefail
 
+SRC=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 UUIDS=("agent-usage@local" "agent-usage@brsnippe.github.io")
-EXTENSIONS_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/gnome-shell/extensions"
+DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+EXTENSIONS_DIR="$DATA_HOME/gnome-shell/extensions"
 BIN_DIR="$HOME/.local/bin"
-STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
-CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
+
+if [[ ${XDG_CURRENT_DESKTOP:-} == *Cinnamon* ]] ||
+  [[ -d $DATA_HOME/cinnamon/applets/agent-usage@local && ! -d $EXTENSIONS_DIR/agent-usage@local ]]; then
+  exec "$SRC/cinnamon/uninstall.sh" "$@"
+fi
+
+# shellcheck source=scripts/common.sh
+source "$SRC/scripts/common.sh"
 
 for uuid in "${UUIDS[@]}"; do
   gnome-extensions disable "$uuid" 2>/dev/null || true
@@ -39,13 +48,5 @@ echo "Removed the extension."
 
 if [[ ${1:-} == --purge ]]; then
   dconf reset -f /org/gnome/shell/extensions/agent-usage/ 2>/dev/null || true
-  # These folders keep Omarchy's names, and on an Omarchy machine they belong
-  # to Omarchy's own bar widget.
-  if [[ -d /usr/share/omarchy ]]; then
-    echo "Omarchy is installed here and uses the same folders; leaving the usage data alone."
-  else
-    rm -rf "$STATE_HOME/omarchy/agents/usage" "$CACHE_HOME/omarchy/agent-usage"
-    rmdir "$STATE_HOME/omarchy/agents" "$STATE_HOME/omarchy" "$CACHE_HOME/omarchy" 2>/dev/null || true
-    echo "Deleted the collected usage data, caches and settings."
-  fi
+  purge_usage_data
 fi

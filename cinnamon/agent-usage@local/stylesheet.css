@@ -1,0 +1,34 @@
+/* ---- Cinnamon
+ * Appended to the shared stylesheet when the applet is built. St ranks rules
+ * by specificity before order, so these name one class more than the Mint
+ * themes' rules they replace. */
+
+/* GNOME draws the menu's frame on .popup-menu-content; Cinnamon wraps that box
+ * in an St.Bin (.menu) that its themes round, pad and shadow. The frame moves
+ * out to the Bin, and the box inside stays plain. */
+.menu.agent-usage-menu {
+  background-color: #1f1f28;
+  background-gradient-direction: none;
+  border: 1px solid #dcd7ba;
+  border-image: none;
+  border-radius: 0;
+  padding: 0;
+  margin: 0;
+  box-shadow: none;
+}
+
+.menu.agent-usage-menu .popup-menu-content {
+  background-color: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  margin: 0;
+  box-shadow: none;
+}
+
+/* The robot and the percentage in the panel, at 90% or more. */
+.applet-box .system-status-icon.agent-usage-alarm,
+.applet-box .applet-icon.agent-usage-alarm,
+.applet-box .applet-label.agent-usage-alarm {
+  color: #c34043;
+}

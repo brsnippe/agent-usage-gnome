@@ -16,16 +16,23 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y gjs libglib2.0-bin jq
 
       - name: Shell scripts parse
-        run: for f in *.sh bin/agent-usage scripts/*.sh test/*.sh agent-usage@local/bin/agent-usage-update macos/agent-usage macos/*.sh macos/test/*.sh; do bash -n "$f"; done
+        run: for f in *.sh bin/agent-usage scripts/*.sh test/*.sh agent-usage@local/bin/agent-usage-update macos/agent-usage macos/*.sh macos/test/*.sh cinnamon/*.sh cinnamon/test/*.sh test/gnome/*.sh; do bash -n "$f"; done
 
       - name: Python compiles
         run: |
-          for f in agent-usage@local/bin/agent-usage-claude agent-usage@local/bin/agent-usage-codex; do
+          for f in agent-usage@local/bin/agent-usage-claude agent-usage@local/bin/agent-usage-codex cinnamon/*.py test/fake-collector test/gnome/*.py; do
             python3 -c 'import ast, sys; ast.parse(open(sys.argv[1]).read(), sys.argv[1])' "$f"
           done
 
       - name: JavaScript parses
         run: for f in agent-usage@local/*.js; do cp "$f" /tmp/check.mjs; node --check /tmp/check.mjs; done
+
+      # The applet as install.sh builds it: Cinnamon's files and the shared
+      # modules rewritten for Cinnamon, all plain scripts.
+      - name: Cinnamon applet builds
+        run: |
+          cinnamon/build-applet.sh /tmp/applet 0.0.0
+          for f in /tmp/applet/*.js; do cp "$f" /tmp/check.cjs; node --check /tmp/check.cjs; done
 
       - name: Settings schema compiles
         run: glib-compile-schemas --strict --dry-run agent-usage@local/schemas
@@ -48,6 +55,63 @@ jobs:
       - name: Tag matches VERSION
         if: startsWith(github.ref, 'refs/tags/v')
         run: test "v$(cat VERSION)" = "$GITHUB_REF_NAME"
+
+  # The GNOME extension in a real GNOME Shell, headless, in Ubuntu's images:
+  # the oldest and the newest GNOME it's made for (46 and 50).
+  gnome:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        release: ["24.04", "26.04"]
+    container: ubuntu:${{ matrix.release }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The extension in a running GNOME Shell
+        timeout-minutes: 20
+        run: bash test/gnome/prepare-ubuntu.sh "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/snapshots"
+
+      - name: Keep the snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gnome-${{ matrix.release }}
+          path: snapshots/
+
+  # The Cinnamon applet in a real Cinnamon, in Linux Mint's own images: it
+  # installs, loads, draws its panel and survives a reinstall. Mint 23's
+  # Cinnamon 6.8 can't be downloaded before its release; 6.6 with 6.8's way of
+  # loading applets stands in for it.
+  cinnamon:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: mint21.3
+            image: mint21.3
+          - name: mint22.3
+            image: mint22.3
+          - name: mint22.3-loader6.8
+            image: mint22.3
+            loader: "6.8"
+    container: linuxmintd/${{ matrix.image }}-amd64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The applet in a running Cinnamon
+        timeout-minutes: 20
+        env:
+          CINNAMON_LOADER: ${{ matrix.loader }}
+        run: bash cinnamon/test/prepare-mint.sh "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/snapshots"
+
+      - name: Keep the snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cinnamon-${{ matrix.name }}
+          path: snapshots/
 
   # The macOS app's logic, and the collectors with the Python a Mac has out of
   # the box: the one from Apple's Command Line Tools (3.9).

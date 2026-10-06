@@ -1,0 +1,65 @@
+#!/usr/bin/env python3
+# Stands in for agent-usage-claude and agent-usage-codex in the smoke tests
+# (cinnamon/test/smoke-test.sh, test/gnome/smoke-test.sh):
+# prints a record shaped like theirs, with numbers that fill every section of
+# the panel. Claude has limits and a busy week; Codex is signed out, so its
+# tab shows the problem card.
+
+import datetime
+import json
+import os
+import sys
+
+agent = os.path.basename(sys.argv[0]).replace("agent-usage-", "")
+now = datetime.datetime.now(datetime.timezone.utc)
+today = datetime.date.today()
+
+
+def at(**delta):
+    return (now + datetime.timedelta(**delta)).isoformat()
+
+
+def week(*counts):
+    return [{"date": (today - datetime.timedelta(days=len(counts) - 1 - i)).isoformat(), "messageCount": n}
+            for i, n in enumerate(counts)]
+
+
+RECORDS = {
+    "claude": {
+        "id": "claude", "name": "Claude Code", "ready": True, "tierLabel": "max 5x",
+        "usageStatusText": "", "authHelpText": "", "hasPromptStats": True,
+        "limits": [
+            {"label": "Session (5-hour)", "percent": 0.61, "resetsAt": at(hours=1, minutes=23)},
+            {"label": "Weekly (7-day)", "percent": 0.18, "resetsAt": at(days=4, hours=6)},
+        ],
+        "limitsFetchedAt": at(), "limitsStale": False,
+        "recentDays": week(42_700_000, 18_300_000, 0, 61_000_000, 97_500_000, 33_800_000, 103_000_000),
+        "todayTokensByModel": {"claude-opus-5-5": 88_000_000, "claude-sonnet-4-5": 15_000_000},
+        "todayTotalTokens": 103_000_000, "todayPrompts": 30, "todaySessions": 2,
+        "totalPrompts": 1874, "totalSessions": 212, "activeDays": 64,
+        "modelUsage": {
+            "claude-opus-5-5": {"inputTokens": 1_680_000, "outputTokens": 9_060_700,
+                                "cacheReadInputTokens": 901_323_100, "cacheCreationInputTokens": 28_940_400},
+            "claude-sonnet-4-5-20250929": {"inputTokens": 410_000, "outputTokens": 2_100_000,
+                                           "cacheReadInputTokens": 120_000_000, "cacheCreationInputTokens": 6_300_000},
+            "claude-haiku-4-5": {"inputTokens": 90_000, "outputTokens": 310_000,
+                                 "cacheReadInputTokens": 8_000_000, "cacheCreationInputTokens": 700_000},
+        },
+        "updatedAt": at(),
+    },
+    "codex": {
+        "id": "codex", "name": "Codex", "ready": True, "tierLabel": "plus",
+        "usageStatusText": "Not signed in",
+        "authHelpText": "Codex isn't signed in, so its limits can't be read. Sign in to see them.",
+        "hasPromptStats": True, "limits": [],
+        "recentDays": week(0, 2_100_000, 5_400_000, 0, 0, 1_200_000, 3_300_000),
+        "todayTokensByModel": {"gpt-5.6-sol": 3_300_000},
+        "todayTotalTokens": 3_300_000, "todayPrompts": 4, "todaySessions": 1,
+        "totalPrompts": 96, "totalSessions": 14, "activeDays": 9,
+        "modelUsage": {"gpt-5.6-sol": {"inputTokens": 2_400_000, "outputTokens": 610_000,
+                                       "cacheReadInputTokens": 9_100_000, "cacheCreationInputTokens": 0}},
+        "updatedAt": at(),
+    },
+}
+
+print(json.dumps(RECORDS[agent]))

@@ -1,6 +1,7 @@
 #!/bin/bash
 # Install (or reinstall) the Agent Usage GNOME Shell extension for the current
-# user. Also removes the older tray-icon version if it's installed.
+# user. Also removes the older tray-icon version if it's installed. In a
+# Cinnamon session (Linux Mint), installs the Cinnamon applet instead.
 
 set -euo pipefail
 
@@ -12,13 +13,16 @@ DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 EXTENSIONS_DIR="$DATA_HOME/gnome-shell/extensions"
 EXT_DIR="$EXTENSIONS_DIR/$UUID"
 BIN_DIR="$HOME/.local/bin"
-USAGE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/agents/usage"
 OLD_APP_DIR="$DATA_HOME/agent-usage-tray"
 OLD_AUTOSTART="${XDG_CONFIG_HOME:-$HOME/.config}/autostart/agent-usage-tray.desktop"
 OLD_LAUNCHER="$DATA_HOME/applications/agent-usage-tray.desktop"
 
-step() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
-note() { printf '\033[33m  ! %s\033[0m\n' "$*"; }
+if [[ ${XDG_CURRENT_DESKTOP:-} == *Cinnamon* ]]; then
+  exec "$SRC/cinnamon/install.sh" "$@"
+fi
+
+# shellcheck source=scripts/common.sh
+source "$SRC/scripts/common.sh"
 
 # Add or remove a uuid in one of org.gnome.shell's string-list settings.
 edit_list() {
@@ -43,7 +47,7 @@ if [[ $EUID -eq 0 ]]; then
   exit 1
 fi
 if [[ ${XDG_CURRENT_DESKTOP:-} != *GNOME* ]] || ! command -v gnome-shell >/dev/null; then
-  echo "This is a GNOME Shell extension; run it inside a GNOME session." >&2
+  echo "This is a GNOME Shell extension (and a Cinnamon applet); run it inside a GNOME or Cinnamon session." >&2
   exit 1
 fi
 shell_version=$(gnome-shell --version | grep -oE '[0-9]+' | head -1)
@@ -53,18 +57,7 @@ if ((shell_version < 46)); then
 fi
 
 step "Checking packages"
-missing=()
-for package in python3 jq fonts-jetbrains-mono libglib2.0-bin; do
-  status=$(dpkg-query -W -f='${Status}' "$package" 2>/dev/null || true)
-  [[ $status == "install ok installed" ]] || missing+=("$package")
-done
-if ((${#missing[@]})); then
-  echo "  Installing: ${missing[*]}"
-  sudo apt-get update
-  sudo apt-get install -y "${missing[@]}"
-else
-  echo "  All present."
-fi
+ensure_packages python3 jq fonts-jetbrains-mono libglib2.0-bin
 
 if [[ -d $OLD_APP_DIR || -e $OLD_AUTOSTART || -e $OLD_LAUNCHER ]]; then
   step "Removing the old tray-icon version"
@@ -92,21 +85,10 @@ for old in "${OLD_UUIDS[@]}"; do
   echo "  Removed. Your settings and usage data are kept."
 done
 
-# The version GNOME's Extensions app and the update check see: the release
-# tag when installing one, otherwise VERSION marked as a development build.
-version=$(cat "$SRC/VERSION" 2>/dev/null || echo 0.0.0)
-from_git=false
-if git -C "$SRC" rev-parse --git-dir >/dev/null 2>&1; then
-  from_git=true
-  if tag=$(git -C "$SRC" describe --tags --exact-match --match 'v[0-9]*' 2>/dev/null); then
-    version="${tag#v}"
-  else
-    version="$version-dev+$(git -C "$SRC" rev-parse --short HEAD)"
-  fi
-  [[ -z $(git -C "$SRC" status --porcelain --untracked-files=no) ]] || version="$version.dirty"
-fi
+# The version GNOME's Extensions app and the update check see.
+read_version "$SRC"
 
-step "Installing the extension ($version)"
+step "Installing the extension ($VERSION_NAME)"
 reinstall=false
 [[ -d $EXT_DIR ]] && reinstall=true
 rm -rf "$EXT_DIR"
@@ -114,11 +96,11 @@ mkdir -p "$(dirname "$EXT_DIR")" "$BIN_DIR"
 cp -r "$SRC/$UUID" "$EXT_DIR"
 chmod +x "$EXT_DIR"/bin/*
 glib-compile-schemas --strict "$EXT_DIR/schemas"
-jq --arg version "$version" '.["version-name"] = $version' "$SRC/$UUID/metadata.json" >"$EXT_DIR/metadata.json"
+jq --arg version "$VERSION_NAME" '.["version-name"] = $version' "$SRC/$UUID/metadata.json" >"$EXT_DIR/metadata.json"
 ln -sf "$EXT_DIR/bin/agent-usage-update" "$BIN_DIR/agent-usage-update"
 # A git install can update itself: the panel checks for new releases through
 # this checkout, and `agent-usage` drives it.
-if $from_git; then
+if $FROM_GIT; then
   printf '%s\n' "$SRC" >"$EXT_DIR/source"
   chmod +x "$SRC/bin/agent-usage"
   ln -sf "$SRC/bin/agent-usage" "$BIN_DIR/agent-usage"
@@ -139,23 +121,7 @@ echo "  Enabled."
 
 step "Collecting usage"
 "$EXT_DIR/bin/agent-usage-update" --force || note "A collector failed; the messages above say which."
-shopt -s nullglob
-found=false
-for record in "$USAGE_DIR"/*.json; do
-  summary=$(jq -r '
-    def has_data: ([.totalPrompts, .totalSessions, .activeDays, .todayPrompts, .todaySessions] | map(. // 0) | add) > 0
-      or ((.limits // []) | length) > 0 or .balance != null;
-    select(has_data)
-    | "  \(.name)\(if (.tierLabel // "") != "" then " · \(.tierLabel)" else "" end): "
-      + ([.limits[]? | "\(.title // .label) \((.percent * 100) | round)%"] | if length > 0 then join(", ") else "no limits" end)
-      + (if (.usageStatusText // "") != "" then "\n    ! \(.usageStatusText). \(.authHelpText // "")" else "" end)
-  ' "$record" 2>/dev/null || true)
-  if [[ -n $summary ]]; then
-    echo "$summary"
-    found=true
-  fi
-done
-$found || note "No agent has usage yet, so the icon stays hidden until one does. Sign in with: claude auth login / codex login"
+summarize_usage || note "No agent has usage yet, so the icon stays hidden until one does. Sign in with: claude auth login / codex login"
 
 step "Next"
 if $reinstall; then
@@ -170,7 +136,7 @@ else
   echo "  To look at it right now without logging out: $SRC/preview.sh"
 fi
 echo "  Settings (refresh intervals, agent, terminal, updates): the ⚙ button in the panel, or: gnome-extensions prefs $UUID"
-if $from_git; then
+if $FROM_GIT; then
   echo "  Updates: agent-usage update (the panel also says when there's a new version)"
   echo "  If something looks wrong: agent-usage diagnose"
 else

@@ -1,6 +1,7 @@
 # 0017. Test without GNOME Shell
 
-- Status: Accepted
+- Status: Accepted, extended by [0030](0030-testing-in-real-shells.md)
+  (GNOME Shell and Cinnamon in Docker)
 - Date: 2026-10-02
 
 ## Context
