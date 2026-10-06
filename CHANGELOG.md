@@ -3,6 +3,18 @@
 Versions are git tags (`v0.6.0`, …). `agent-usage update` installs the newest
 one.
 
+## 0.14.1
+
+On a Mac, the robot shows its colors.
+
+- **Orange, green and red:** macOS drew the robot black instead, because of
+  a macOS bug with tinted menu bar icons. The color is now part of the image
+  itself. That also brings back the red robot at 90% or more, which never
+  showed on a Mac.
+- **VoiceOver** says when a session waits for you, or is done.
+- **Tests:** the Mac's CI takes a screenshot of the real menu bar with a
+  session waiting, and runs the session hooks on the Mac's own Python.
+
 ## 0.14.0
 
 Right-click opening your agent can be switched off. On GNOME, Linux Mint and

@@ -140,6 +140,14 @@ details:
   the robot stays orange until that tool finishes.
 - **GNOME shows the colors only after it reloads** the extension (log out
   and in on Wayland), as with any update. The hooks work right away.
+- **A Mac draws a tinted menu bar icon black:** since macOS 11, a
+  `contentTintColor` on a status item's template image comes out black,
+  whatever the colour (FB8530353). v0.12.0 used it, so the robot went black
+  instead of orange or green, and the red at 90% never showed either. Since
+  v0.14.1 the colour is painted into a copy of the robot, which isn't a
+  template image, and the menu bar draws that as it is. The panel snapshots
+  draw those same images, and CI takes a screenshot of the real menu bar
+  with a session waiting.
 - **Tests:** `test/sessions-test.js` and `SessionsTests.swift` (the rules),
   `test/session-hooks-test.py` (the hook and installing it),
   `test/opencode-plugin-test.mjs` (the plugin, with a stand-in OpenCode),

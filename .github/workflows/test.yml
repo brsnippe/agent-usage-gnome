@@ -140,19 +140,28 @@ jobs:
         run: '"macos/build/Agent Usage.app/Contents/MacOS/AgentUsage" --snapshot macos/snapshots'
 
       # The real app on a Mac with no agents signed in: it has to find Python
-      # and its bundled collectors, and their records have to land.
+      # and its bundled collectors, and their records have to land. A session
+      # waits for input meanwhile, so the screenshot of the real menu bar
+      # shows the robot orange (when the runner allows screenshots at all).
       - name: The app starts and collects
         timeout-minutes: 3
         run: |
           usage=~/.local/state/omarchy/agents/usage
+          sessions=~/.local/state/omarchy/agents/sessions
+          mkdir -p "$sessions" macos/snapshots
+          sleep 600 &
+          waiting=$!
+          now=$(($(date +%s) * 1000))
+          printf '{"agent":"claude","session":"ci","state":"waiting","since":%s,"updated":%s,"pid":%s}\n' "$now" "$now" "$waiting" >"$sessions/claude-ci.json"
           "macos/build/Agent Usage.app/Contents/MacOS/AgentUsage" &
           pid=$!
           for _ in $(seq 90); do
             [[ -f $usage/claude.json && -f $usage/codex.json ]] && break
             sleep 1
           done
+          screencapture -x macos/snapshots/menubar-real.png || echo "no screenshot"
           kill -0 $pid
-          kill $pid
+          kill $pid "$waiting"
           cat ~/Library/Logs/AgentUsage/agent-usage.log
           for agent in claude codex; do
             /usr/bin/python3 -c 'import json, sys; r = json.load(open(sys.argv[1])); print(r["id"], "|", r["usageStatusText"])' "$usage/$agent.json"
@@ -198,6 +207,11 @@ jobs:
 
       - name: Codex signed out
         run: /usr/bin/python3 test/codex-sign-in-test.py
+
+      # The Claude Code hooks run on this Python on a Mac, and find the agent
+      # through ps rather than /proc.
+      - name: Session hooks
+        run: /usr/bin/python3 test/session-hooks-test.py
 
       - name: Collectors run without any agent data
         run: |

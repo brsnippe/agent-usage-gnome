@@ -85,8 +85,10 @@ enum Snapshot {
     }
 }
 
-/// The menu bar label in its four states, on a dark and a light menu bar.
-/// macOS draws the real one; this is how it's meant to come out.
+/// The menu bar label in its six states, on a dark and a light menu bar:
+/// usual, red, faded, robot only, a session waiting and a session done.
+/// macOS draws the real one; this is how it's meant to come out. The
+/// coloured robots are the very images the app hands the menu bar.
 struct MenuBarSamples: View {
     var body: some View {
         HStack(spacing: 0) {
@@ -99,17 +101,24 @@ struct MenuBarSamples: View {
         let text = dark ? Color.white : Color.black
         return VStack(alignment: .leading, spacing: 6) {
             label("61%", color: text)
-            label("94%", color: Theme.urgent)
+            label("94%", color: Theme.urgent, robot: Theme.urgentNS)
             label("61%", color: text, faded: true)
             label(nil, color: text)
+            label("61%", color: text, robot: Theme.waitingNS)
+            label("61%", color: text, robot: Theme.readyNS)
         }
         .padding(10)
         .background(dark ? Color(hex: 0x2A2A2E) : Color(hex: 0xECECEC))
     }
 
-    private func label(_ text: String?, color: Color, faded: Bool = false) -> some View {
+    private func label(_ text: String?, color: Color, robot tint: NSColor? = nil, faded: Bool = false) -> some View {
         HStack(spacing: 4) {
-            Image(nsImage: Assets.robot).renderingMode(.template).foregroundColor(color)
+            if let tint {
+                Image(nsImage: Assets.robot(tint))
+            } else {
+                // The menu bar colours the template robot like its text.
+                Image(nsImage: Assets.robot).renderingMode(.template).foregroundColor(color)
+            }
             if let text {
                 Text(text)
                     .font(.system(size: NSFont.systemFontSize).monospacedDigit())
