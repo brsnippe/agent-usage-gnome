@@ -28,7 +28,9 @@
   width: 380px;
   padding: 16px;
   spacing: 12px;
-  font-family: "JetBrains Mono", "JetBrainsMono Nerd Font", monospace;
+  /* Unquoted: St drops the whole list when any name after the first is
+   * quoted, and the panel falls back to the system font. */
+  font-family: JetBrains Mono, JetBrainsMono Nerd Font, monospace;
   font-size: 10pt;
   color: #dcd7ba;
 }
