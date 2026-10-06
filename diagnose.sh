@@ -34,11 +34,12 @@ else
   fi
 fi
 echo "enabled-extensions: $(gsettings get org.gnome.shell enabled-extensions)"
-for key in limits-interval scan-interval session-threshold agent agent-command terminal terminal-command; do
+for key in limits-interval scan-interval session-threshold session-colors agent agent-command terminal terminal-command; do
   echo "$key: $(gsettings --schemadir "$EXT_DIR/schemas" get org.gnome.shell.extensions.agent-usage "$key" 2>&1)"
 done
 
 print_usage_records
+print_session_colors "$EXT_DIR/hooks/agent-usage-session"
 
 echo
 echo "== GNOME Shell log for this extension (this boot)"

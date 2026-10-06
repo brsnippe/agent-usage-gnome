@@ -28,7 +28,9 @@ main() {
   REPO=$(plist "$BUNDLE" AgentUsageRepository)
   REPO=${REPO:-brsnippe/agent-usage-gnome}
   USAGE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/agents/usage"
+  SESSIONS_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/agents/sessions"
   CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/omarchy/agent-usage"
+  HOOKS="$APP/Contents/Resources/hooks/agent-usage-session"
   LOG="$HOME/Library/Logs/AgentUsage/agent-usage.log"
 
   local command="${1:-help}"
@@ -206,7 +208,8 @@ install_app() {
   ln -sf "$APP/Contents/Resources/bin/agent-usage" "$LINK"
   echo "Installed Agent Usage ${version:-} in ~/Applications."
 
-  if ! python_path >/dev/null; then
+  local python
+  if ! python=$(python_path); then
     cat <<'EOF'
 
 Agent Usage needs Python 3 to collect usage, which comes with Apple's
@@ -214,6 +217,20 @@ Command Line Tools. Install them with:
 
   xcode-select --install
 EOF
+  elif [[ $(defaults read "$BUNDLE_ID" sessionColors 2>/dev/null) == 0 ]]; then
+    echo
+    echo "Session colors are switched off in the settings, so Claude Code and OpenCode are left as they are."
+  else
+    # The app adds them too whenever it starts, so an agent installed later
+    # gets them as well.
+    echo
+    echo "Session colors:"
+    if "$python" "$HOOKS" install; then
+      echo "  They turn the robot orange while a session waits for you, and green once it's done."
+      echo "  To take them out again: switch off Session colors in the settings."
+    else
+      echo "  Couldn't add them; the robot keeps its usual color."
+    fi
   fi
   case ":$PATH:" in
   *":$HOME/.local/bin:"*) ;;
@@ -285,6 +302,14 @@ EOF
   fi
 
   echo
+  echo "== Session colors =="
+  if [[ -n ${python:-} && -f $HOOKS ]]; then
+    "$python" "$HOOKS" status 2>&1
+  else
+    echo "unavailable (needs Python and the app)"
+  fi
+
+  echo
   echo "== Settings =="
   defaults read "$BUNDLE_ID" 2>/dev/null || echo "defaults"
 
@@ -307,6 +332,12 @@ uninstall() {
     "$APP/Contents/MacOS/AgentUsage" --unregister-login-item 2>/dev/null || true
   fi
   stop_app
+  # The hooks in Claude Code and the plugin in OpenCode, while the app that
+  # has the script is still there.
+  local python
+  if python=$(python_path) && [[ -f $HOOKS ]]; then
+    "$python" "$HOOKS" uninstall 2>/dev/null || true
+  fi
   rm -rf "$APP" "$HOME/Library/Caches/AgentUsage"
   if [[ -L $LINK ]]; then
     rm -f "$LINK"
@@ -314,7 +345,7 @@ uninstall() {
   echo "Removed Agent Usage."
 
   if $purge; then
-    rm -rf "$HOME/Library/Logs/AgentUsage" "$USAGE_DIR" "$CACHE_DIR"
+    rm -rf "$HOME/Library/Logs/AgentUsage" "$USAGE_DIR" "$SESSIONS_DIR" "$CACHE_DIR"
     defaults delete "$BUNDLE_ID" 2>/dev/null || true
     echo "Removed its usage data, settings and logs."
   fi

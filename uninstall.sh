@@ -20,6 +20,8 @@ fi
 # shellcheck source=scripts/common.sh
 source "$SRC/scripts/common.sh"
 
+remove_session_hooks "$SRC/agent-usage@local/hooks/agent-usage-session"
+
 for uuid in "${UUIDS[@]}"; do
   gnome-extensions disable "$uuid" 2>/dev/null || true
   current=$(gsettings get org.gnome.shell enabled-extensions 2>/dev/null || echo "[]")

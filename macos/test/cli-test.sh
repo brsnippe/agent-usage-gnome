@@ -31,10 +31,16 @@ contains() {
 HOME=$(mktemp -d)
 export HOME AGENT_USAGE_ZIP="file://$zip" AGENT_USAGE_NO_OPEN=1 PATH="$HOME/.local/bin:$PATH"
 app="$HOME/Applications/Agent Usage.app"
+# Someone's Claude Code, with a hook of their own.
+mkdir -p "$HOME/.claude"
+echo '{"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "say done"}]}]}}' >"$HOME/.claude/settings.json"
 
 out=$(bash "$root/get.sh" 2>&1)
 check "get.sh installs the app into ~/Applications" test -x "$app/Contents/MacOS/AgentUsage"
 check "with its collectors" test -x "$app/Contents/Resources/bin/agent-usage-claude"
+check "and the session hooks, outside the collectors" test -x "$app/Contents/Resources/hooks/agent-usage-session"
+check "which it adds to Claude Code" grep -q "agent-usage-session hook claude" "$HOME/.claude/settings.json"
+check "next to theirs" grep -q "say done" "$HOME/.claude/settings.json"
 check "and links the command" test "$(readlink "$HOME/.local/bin/agent-usage")" = "$app/Contents/Resources/bin/agent-usage"
 check "the signature survives" codesign --verify --strict "$app"
 check "no quarantine flag" test -z "$(xattr -p com.apple.quarantine "$app" 2>/dev/null)"
@@ -58,6 +64,8 @@ echo '{"id": "claude"}' >"$HOME/.local/state/omarchy/agents/usage/claude.json"
 agent-usage uninstall >/dev/null 2>&1
 check "uninstall removes the app" test ! -e "$app"
 check "and the command" test ! -L "$HOME/.local/bin/agent-usage"
+check "and the session hooks" bash -c '! grep -q agent-usage-session "$HOME/.claude/settings.json"'
+check "but not theirs" grep -q "say done" "$HOME/.claude/settings.json"
 check "but keeps the usage data" test -f "$HOME/.local/state/omarchy/agents/usage/claude.json"
 
 bash "$root/get.sh" >/dev/null 2>&1

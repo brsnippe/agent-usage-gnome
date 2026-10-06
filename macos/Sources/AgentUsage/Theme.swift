@@ -1,3 +1,4 @@
+import AgentUsageCore
 import AppKit
 import CoreText
 import SwiftUI
@@ -13,6 +14,16 @@ enum Theme {
     static let stale = Color(hex: 0xC0A36E)
 
     static let urgentNS = NSColor(red: 0xC3 / 255, green: 0x40 / 255, blue: 0x43 / 255, alpha: 1)
+    /// The robot while a session waits for you, and once one is done.
+    static let waitingNS = NSColor(red: 0xFF / 255, green: 0xA0 / 255, blue: 0x66 / 255, alpha: 1)
+    static let readyNS = NSColor(red: 0x98 / 255, green: 0xBB / 255, blue: 0x6C / 255, alpha: 1)
+
+    static func sessionNS(_ session: TopBarSession) -> NSColor {
+        switch session {
+        case .waiting: return waitingNS
+        case .ready: return readyNS
+        }
+    }
 
     /// The panel's content width; the padding comes on top, as in the GNOME
     /// panel, and the 1-point border sits inside the padding.

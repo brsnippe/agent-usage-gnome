@@ -99,6 +99,15 @@ if $FROM_GIT; then
 fi
 echo "  $APPLET_DIR"
 
+# Kept as it was, when someone switched it off.
+colors=true
+for settings in "${XDG_CONFIG_HOME:-$HOME/.config}/cinnamon/spices/$UUID"/*.json; do
+  if [[ -f $settings && $(jq -r '."session-colors".value' "$settings" 2>/dev/null) == false ]]; then
+    colors=false
+  fi
+done
+install_session_hooks "$APPLET_DIR/hooks/agent-usage-session" "$colors"
+
 # Before the applet loads, so it opens on fresh numbers.
 step "Collecting usage"
 "$APPLET_DIR/bin/agent-usage-update" --force || note "A collector failed; the messages above say which."
@@ -128,7 +137,7 @@ fi
 
 step "Next"
 echo "  The robot in the panel: left-click opens the panel, right-click opens your agent, middle-click refreshes."
-echo "  Settings (refresh intervals, agent, terminal, updates): the ⚙ button in the panel, or System Settings → Applets."
+echo "  Settings (refresh intervals, session colors, agent, terminal, updates): the ⚙ button in the panel, or System Settings → Applets."
 if $FROM_GIT; then
   echo "  Updates: agent-usage update (the panel also says when there's a new version)"
   echo "  If something looks wrong: agent-usage diagnose"

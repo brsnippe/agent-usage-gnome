@@ -45,7 +45,7 @@ class AgentUsageApplet extends Applet.TextIconApplet {
     constructor(metadata, orientation, panelHeight, instanceId) {
         super(orientation, panelHeight, instanceId);
         this._path = metadata.path;
-        this._topBar = {text: '', alarming: false, stale: false};
+        this._topBar = {text: '', alarming: false, stale: false, session: null};
         this._terminalSettings = undefined;
 
         this.setAllowedLayout(Applet.AllowedLayout.BOTH);
@@ -137,7 +137,7 @@ class AgentUsageApplet extends Applet.TextIconApplet {
 
     // Cinnamon resets the icon's style classes when the panel changes height.
     on_panel_height_changed() {
-        this._styleAlarm();
+        this._styleTopBar();
     }
 
     on_applet_removed_from_panel() {
@@ -185,17 +185,27 @@ class AgentUsageApplet extends Applet.TextIconApplet {
         this._topBar = state;
         this.set_applet_label(state.text);
         this._applet_label.opacity = state.stale ? 140 : 255;
-        this._styleAlarm();
+        this._styleTopBar();
     }
 
-    _styleAlarm() {
-        for (const actor of [this._applet_icon, this._applet_label]) {
+    // The robot says what the sessions want; red stays with the number, and
+    // only goes to the robot when no session wants anything.
+    _styleTopBar() {
+        const {alarming, session} = this._topBar;
+        const icon = {
+            'agent-usage-waiting': session === 'waiting',
+            'agent-usage-ready': session === 'ready',
+            'agent-usage-alarm': alarming && !session,
+        };
+        for (const [actor, wanted] of [[this._applet_icon, icon], [this._applet_label, {'agent-usage-alarm': alarming}]]) {
             if (!actor)
                 continue;
-            if (this._topBar.alarming)
-                actor.add_style_class_name('agent-usage-alarm');
-            else
-                actor.remove_style_class_name('agent-usage-alarm');
+            for (const [name, on] of Object.entries(wanted)) {
+                if (on)
+                    actor.add_style_class_name(name);
+                else
+                    actor.remove_style_class_name(name);
+            }
         }
     }
 

@@ -111,6 +111,7 @@ enum Settings {
     static let limitsInterval = "limitsInterval"
     static let scanInterval = "scanInterval"
     static let sessionThreshold = "sessionThreshold"
+    static let sessionColors = "sessionColors"
     static let agent = "agent"
     static let agentCommand = "agentCommand"
     static let terminal = "terminal"
@@ -120,7 +121,7 @@ enum Settings {
 
     static func registerDefaults() {
         UserDefaults.standard.register(defaults: [
-            limitsInterval: 300, scanInterval: 15, sessionThreshold: 40, agent: "opencode", agentCommand: "",
+            limitsInterval: 300, scanInterval: 15, sessionThreshold: 40, sessionColors: true, agent: "opencode", agentCommand: "",
             terminal: "auto", terminalCommand: "", checkUpdates: true,
         ])
     }

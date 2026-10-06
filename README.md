@@ -11,6 +11,9 @@ icon: see [macOS](#macos).
 - **Top bar:** a robot icon with your fullest limit (`61%`). It turns red at
   90% or more. It stays hidden until an agent has usage to show. See
   [Which limit the top bar shows](#which-limit-the-top-bar-shows).
+- **Session colors:** the robot turns orange while a Claude Code or OpenCode
+  session waits for you, and green once one has finished its turn. See
+  [Session colors](#session-colors).
 - **Panel:**
   - **Header:** the agent's logo, name and plan, with refresh, *Open agent*
     and ⚙ settings buttons.
@@ -86,6 +89,7 @@ The `agent-usage` commands are the same as on GNOME (see [Update](#update)).
 | The applet | `~/.local/share/cinnamon/applets/agent-usage@local/` |
 | Settings | `~/.config/cinnamon/spices/agent-usage@local/` |
 | Usage records | `~/.local/state/omarchy/agents/usage/`, as on GNOME |
+| Session states | `~/.local/state/omarchy/agents/sessions/`, as on GNOME |
 | Log | Cinnamon's; `agent-usage diagnose` shows the applet's lines |
 
 ## macOS
@@ -153,7 +157,7 @@ xattr -dr com.apple.quarantine "Agent Usage.app"
 agent-usage update               # install the newest release
 agent-usage version              # installed version, and the newest release
 agent-usage diagnose             # what to paste when something looks wrong
-agent-usage uninstall            # remove the app (--purge: also data, settings, logs)
+agent-usage uninstall            # remove the app and the session hooks (--purge: also data, settings, logs)
 ```
 
 ### Where things are on a Mac
@@ -162,6 +166,7 @@ agent-usage uninstall            # remove the app (--purge: also data, settings,
 |---|---|
 | The app | `~/Applications/Agent Usage.app` |
 | Usage records | `~/.local/state/omarchy/agents/usage/`, as on Linux |
+| Session states | `~/.local/state/omarchy/agents/sessions/`, as on Linux |
 | Settings | the `io.github.brsnippe.agent-usage` defaults |
 | Log | `~/Library/Logs/AgentUsage/agent-usage.log` |
 
@@ -206,6 +211,54 @@ away.
   top bar always shows the session limit.
 - **Red** still means *any* limit is at 90% or more, also when the top bar
   shows the session.
+
+## Session colors
+
+The robot shows what your Claude Code and OpenCode sessions want:
+
+| Robot | When |
+|---|---|
+| **Orange** | A session waits for you: a permission prompt, a question, a plan to approve, an MCP server asking for input |
+| **Green** | A session finished its turn, and you haven't opened the panel since |
+| Its usual color | Sessions working, idle, or finished and seen |
+
+- **Clearing green:** open the panel, or right-click to open your agent. The
+  next finished turn turns it green again.
+- **Orange** only goes away once the session moves on: answer it in the
+  agent.
+- **Several sessions:** orange if any of them waits, green if any finished
+  turn is unseen.
+- **Subagents:** one waiting for a permission turns the robot orange; one
+  finishing doesn't turn it green.
+- **Red:** a limit at 90% or more keeps the percentage red. The robot itself
+  only turns red when no session wants anything.
+- **Left out:** sessions whose agent has quit (say, a closed terminal), and
+  sessions nobody touched for a day.
+
+### How it hooks in
+
+- **Claude Code:** hooks in `~/.claude/settings.json` (or in
+  `$CLAUDE_CONFIG_DIR`), after your own. They run
+  `~/.local/bin/agent-usage-session`, which notes each session's state in a
+  small file. Claude Code picks up the change by itself.
+- **OpenCode 2:** a plugin, `~/.config/opencode/plugins/agent-usage.js`,
+  which OpenCode loads by itself. OpenCode 1 loads plugins differently, so
+  it gets none.
+- **When they're added:** the installer and every update add them, and say
+  so. The panel does it too whenever it starts, so an agent you install
+  later gets them as well. An agent that isn't installed gets nothing.
+- **Switching it off:** *Session colors* in the settings (under *Top bar* on
+  GNOME, *Panel* on Linux Mint, *Menu bar* on a Mac). That takes the hooks
+  and the plugin out again, and they stay out until you switch it back on.
+  `agent-usage uninstall` takes them out too.
+- **After the first install on GNOME:** the hooks work right away, but the
+  robot only changes color once GNOME has reloaded the extension (see
+  [After installing or updating](#after-installing-or-updating)).
+- **Seeing what's going on:** `agent-usage diagnose` shows what's installed
+  and every session's state.
+
+Claude Code has no hook for approving a permission. After you approve one,
+the robot stays orange until that tool has finished.
 
 ## Opening your agent
 
@@ -321,8 +374,8 @@ Other commands:
 - `agent-usage update --main`: the latest commit instead of the newest
   release, for testing.
 - `agent-usage diagnose`: what to paste when something looks wrong.
-- `agent-usage uninstall`: remove it. Add `--purge` to also delete the usage
-  data and settings.
+- `agent-usage uninstall`: remove it, and the session colors' hooks. Add
+  `--purge` to also delete the usage data and settings.
 
 ## After installing or updating
 
@@ -351,7 +404,9 @@ The installer:
    `~/.local/share/gnome-shell/extensions/agent-usage@local/`.
    It replaces any previous copy, compiles its settings and turns it on. Your
    chosen intervals are kept across reinstalls.
-4. Collects usage once and prints what it found.
+4. Adds the [session colors](#session-colors)' hooks to Claude Code and
+   their plugin to OpenCode 2, unless you've switched them off.
+5. Collects usage once and prints what it found.
 
 Everything is per user. Each person's install reads their own Claude Code
 login, OpenCode history and Codex login, and keeps its data in their own home
@@ -390,11 +445,13 @@ The extension lives in `agent-usage@local/`:
 | `bin/agent-usage-claude` | Claude Code limits (Anthropic's usage endpoint) and token stats. The stats come from `~/.claude/projects` plus OpenCode sessions on the `anthropic` provider |
 | `bin/agent-usage-codex` | Codex limits (`codex app-server`) and token stats. The stats come from Codex sessions plus OpenCode sessions on the `openai` provider |
 | `bin/agent-usage-update` | Runs the collectors and writes one JSON file per agent to `~/.local/state/omarchy/agents/usage/`. It's also on your PATH, so `agent-usage-update --force` collects again by hand |
-| `panel.js`, `usage.js`, `updates.js`, `stylesheet.css` | The panel. It schedules the updater and displays those JSON files. The Cinnamon applet uses the same files |
+| `hooks/agent-usage-session` | The [session colors](#session-colors)' hook for Claude Code, which writes one small file per session to `~/.local/state/omarchy/agents/sessions/`. Its `install`, `uninstall` and `status` add and remove the hooks in Claude Code and the plugin in OpenCode. Outside `bin/`, where everything is a collector |
+| `hooks/opencode-agent-usage.js` | The OpenCode 2 plugin that writes the same files for OpenCode sessions |
+| `panel.js`, `usage.js`, `sessions.js`, `updates.js`, `stylesheet.css` | The panel. It schedules the updater, displays those JSON files, and colors the robot by the session files. The Cinnamon applet uses the same files |
 | `extension.js` | GNOME's top-bar button and the menu around the panel |
 | `terminals.js` | Which agent or desktop app to open, how to start each terminal, and the sign-in commands. The panel and the settings window both use it |
 | `versions.js` | Compares release versions for the update notice |
-| `prefs.js`, `schemas/` | The settings window and its settings: the refresh intervals, which limit the top bar shows, the agent, the terminal and update checks |
+| `prefs.js`, `schemas/` | The settings window and its settings: the refresh intervals, which limit the top bar shows, the session colors, the agent, the terminal and update checks |
 
 Around it, in the repository:
 
@@ -416,20 +473,21 @@ panel when it's installed:
 |---|---|
 | `agent-usage@local/applet.js` | The applet in the panel, its popup, its settings and clicks |
 | `agent-usage@local/settings-schema.json`, `metadata.json`, `stylesheet.css`, `icon.png` | Cinnamon's settings window, the applet's details, Cinnamon's additions to the stylesheet, the icon in System Settings |
-| `build-applet.sh` | Builds the applet: those files, the collectors and icons, the shared stylesheet, and the shared modules rewritten for Cinnamon |
+| `build-applet.sh` | Builds the applet: those files, the collectors, session hooks and icons, the shared stylesheet, and the shared modules rewritten for Cinnamon |
 | `esm-to-cinnamon.py` | Rewrites a shared module (an ES module) into the form Cinnamon loads |
 | `install.sh`, `uninstall.sh`, `diagnose.sh` | Install, remove and debug the applet |
 | `cinnamon-state.py` | Asks the running Cinnamon whether the applet loaded, and for its log lines |
 | `test/` | The smoke test in Linux Mint's Docker images |
 
-The macOS app lives in `macos/` and bundles the same two collectors:
+The macOS app lives in `macos/` and bundles the same two collectors, and the
+session hooks:
 
 | Piece | What it does |
 |---|---|
-| `Sources/AgentUsageCore/` | Everything the panel decides without a screen, ported from `usage.js`, `updates.js`, `versions.js` and `terminals.js`. It also runs the collectors itself, since `agent-usage-update` needs bash 4 and a Mac has 3.2. Foundation only, so it builds and tests on Linux too |
+| `Sources/AgentUsageCore/` | Everything the panel decides without a screen, ported from `usage.js`, `sessions.js`, `updates.js`, `versions.js` and `terminals.js`. It also runs the collectors itself, since `agent-usage-update` needs bash 4 and a Mac has 3.2. Foundation only, so it builds and tests on Linux too |
 | `Sources/AgentUsage/` | The menu bar item, the panel (SwiftUI), the settings window, the timers, the update check, start at login |
 | `Resources/` | `Info.plist`, the icons as PDFs and JetBrains Mono |
-| `build-app.sh` | Builds `Agent Usage.app`: universal, signed ad hoc, with the collectors from `agent-usage@local/bin` |
+| `build-app.sh` | Builds `Agent Usage.app`: universal, signed ad hoc, with the collectors from `agent-usage@local/bin` and the session hooks from `agent-usage@local/hooks` |
 | `agent-usage` | The Mac's `agent-usage` command, inside the app |
 | `Tests/`, `test/` | The Swift tests, and the Mac's install, update and uninstall test |
 
@@ -516,6 +574,8 @@ for t in test/*-test.js; do gjs -m "$t"; done   # panel logic, the modules and s
 python3 test/claude-limits-test.py              # Claude limits back-off, refused sign-in
 python3 test/claude-keychain-test.py            # Claude sign-in from the macOS Keychain
 python3 test/codex-sign-in-test.py              # Codex signed out, with a fake app server
+python3 test/session-hooks-test.py              # the session colors' hook, and adding it to Claude Code and OpenCode
+node test/opencode-plugin-test.mjs              # the OpenCode plugin, with a stand-in OpenCode
 test/cli-test.sh                                # install, update, uninstall from git, on GNOME and Mint
 (cd macos && swift test)                        # the macOS app's logic, on Linux too
 ```

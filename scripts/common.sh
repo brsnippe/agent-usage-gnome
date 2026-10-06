@@ -2,6 +2,7 @@
 # Cinnamon ones (cinnamon/*.sh). Sourced, not run.
 
 USAGE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/agents/usage"
+SESSIONS_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/agents/sessions"
 
 step() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 note() { printf '\033[33m  ! %s\033[0m\n' "$*"; }
@@ -63,9 +64,35 @@ summarize_usage() {
   return $found
 }
 
-# --purge: the usage data and caches the collectors wrote.
+# The session colors' hooks in Claude Code and the plugin in OpenCode, unless
+# Session colors is switched off ($2 is "false"). The panel adds them too
+# whenever it starts, so an agent installed later gets them as well.
+install_session_hooks() {
+  local script="$1" enabled="${2:-true}"
+  step "Session colors"
+  if [[ $enabled == false ]]; then
+    echo "  Switched off in the settings, so Claude Code and OpenCode are left as they are."
+    return
+  fi
+  if "$script" install; then
+    echo "  They turn the robot orange while a session waits for you, and green once it's done."
+    echo "  To take them out again: switch off Session colors in the settings."
+  else
+    note "Couldn't add them; the robot keeps its usual color."
+  fi
+}
+
+# Takes the hooks and the plugin out again; $1 is any copy of the script.
+remove_session_hooks() {
+  "$1" uninstall 2>/dev/null || true
+}
+
+# --purge: the usage data and caches the collectors wrote, and the sessions
+# the hooks reported.
 purge_usage_data() {
   local state_home="${XDG_STATE_HOME:-$HOME/.local/state}" cache_home="${XDG_CACHE_HOME:-$HOME/.cache}"
+  # Only this panel uses the sessions folder.
+  rm -rf "$SESSIONS_DIR"
   # These folders keep Omarchy's names, and on an Omarchy machine they belong
   # to Omarchy's own bar widget.
   if [[ -d /usr/share/omarchy ]]; then
@@ -96,6 +123,17 @@ print_usage_records() {
       (if .backoffUntilMs then "rate limited: paused \(.backoffSeconds)s, until \(.backoffUntilMs / 1000 | strflocaltime("%H:%M:%S"))" else "rate limited: no" end)' "$limits_cache" 2>&1
   else
     echo "no checks yet"
+  fi
+}
+
+# diagnose: the session colors' hooks and the sessions they reported.
+print_session_colors() {
+  echo
+  echo "== Session colors"
+  if [[ -x $1 ]]; then
+    "$1" status 2>&1
+  else
+    echo "$1 is missing"
   fi
 }
 

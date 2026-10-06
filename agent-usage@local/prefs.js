@@ -153,6 +153,13 @@ export default class AgentUsagePreferences extends ExtensionPreferences {
         });
         settings.bind('session-threshold', session, 'value', Gio.SettingsBindFlags.DEFAULT);
         group.add(session);
+
+        const colors = new Adw.SwitchRow({
+            title: 'Session colors',
+            subtitle: 'The robot turns orange while a Claude Code or OpenCode session waits for you, and green once one has finished, until you open the panel. Works through hooks in Claude Code and a plugin in OpenCode 2; switching this off removes them.',
+        });
+        settings.bind('session-colors', colors, 'active', Gio.SettingsBindFlags.DEFAULT);
+        group.add(colors);
         return group;
     }
 

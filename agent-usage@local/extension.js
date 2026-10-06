@@ -17,6 +17,13 @@ import * as Util from 'resource:///org/gnome/shell/misc/util.js';
 
 import {PanelController} from './panel.js';
 
+function setStyleClass(actor, name, on) {
+    if (on)
+        actor.add_style_class_name(name);
+    else
+        actor.remove_style_class_name(name);
+}
+
 const Indicator = GObject.registerClass(
 class AgentUsageIndicator extends PanelMenu.Button {
     _init(extension) {
@@ -99,17 +106,16 @@ class AgentUsageIndicator extends PanelMenu.Button {
     }
 
     // Nothing to report, nothing in the top bar: the icon appears the moment
-    // the first scan finds usage.
-    _showTopBar({hasUsage, text, alarming, stale}) {
-        this.visible = hasUsage;
+    // the first scan finds usage, or a session wants you.
+    _showTopBar({hasUsage, text, alarming, stale, session}) {
+        this.visible = hasUsage || session !== null;
         this._label.text = text;
         this._label.visible = text !== '';
-        for (const actor of [this._icon, this._label]) {
-            if (alarming)
-                actor.add_style_class_name('agent-usage-alarm');
-            else
-                actor.remove_style_class_name('agent-usage-alarm');
-        }
+        // The robot says what the sessions want; red stays with the number.
+        setStyleClass(this._icon, 'agent-usage-waiting', session === 'waiting');
+        setStyleClass(this._icon, 'agent-usage-ready', session === 'ready');
+        setStyleClass(this._icon, 'agent-usage-alarm', alarming && session === null);
+        setStyleClass(this._label, 'agent-usage-alarm', alarming);
         this._label.opacity = stale ? 140 : 255;
     }
 

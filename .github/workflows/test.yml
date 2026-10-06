@@ -20,12 +20,12 @@ jobs:
 
       - name: Python compiles
         run: |
-          for f in agent-usage@local/bin/agent-usage-claude agent-usage@local/bin/agent-usage-codex cinnamon/*.py test/fake-collector test/gnome/*.py; do
+          for f in agent-usage@local/bin/agent-usage-claude agent-usage@local/bin/agent-usage-codex agent-usage@local/hooks/agent-usage-session cinnamon/*.py test/fake-collector test/gnome/*.py; do
             python3 -c 'import ast, sys; ast.parse(open(sys.argv[1]).read(), sys.argv[1])' "$f"
           done
 
       - name: JavaScript parses
-        run: for f in agent-usage@local/*.js; do cp "$f" /tmp/check.mjs; node --check /tmp/check.mjs; done
+        run: for f in agent-usage@local/*.js agent-usage@local/hooks/*.js; do cp "$f" /tmp/check.mjs; node --check /tmp/check.mjs; done
 
       # The applet as install.sh builds it: Cinnamon's files and the shared
       # modules rewritten for Cinnamon, all plain scripts.
@@ -48,6 +48,12 @@ jobs:
 
       - name: Codex signed out
         run: python3 test/codex-sign-in-test.py
+
+      - name: Session hooks in Claude Code and OpenCode
+        run: python3 test/session-hooks-test.py
+
+      - name: The OpenCode plugin
+        run: node test/opencode-plugin-test.mjs
 
       - name: Install, update and uninstall from git
         run: test/cli-test.sh

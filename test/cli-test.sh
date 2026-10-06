@@ -60,6 +60,8 @@ esac
 EOF
 printf '#!/bin/bash\nexit 0\n' >"$T/stubs/gnome-extensions"
 printf '#!/bin/bash\nprintf "install ok installed"\n' >"$T/stubs/dpkg-query"
+# OpenCode 2, for the session colors' plugin.
+printf '#!/bin/bash\necho "opencode v2.0.22"\n' >"$T/stubs/opencode"
 # Linux Mint's: Cinnamon, and its D-Bus interface, which only records calls.
 printf '#!/bin/bash\necho "Cinnamon 6.6.4"\n' >"$T/stubs/cinnamon"
 printf '#!/bin/bash\necho "$*" >>"%s"\n' "$T/gdbus.log" >"$T/stubs/gdbus"
@@ -75,11 +77,22 @@ EXT="$H/.local/share/gnome-shell/extensions/agent-usage@local"
 CLONE="$H/.local/share/agent-usage-gnome"
 CLI="$H/.local/bin/agent-usage"
 installed() { jq -r '.["version-name"]' "$EXT/metadata.json" 2>/dev/null; }
+# Someone's Claude Code, with a hook of their own.
+mkdir -p "$H/.claude"
+THEIR_SETTINGS='{"theme":"dark","hooks":{"Stop":[{"hooks":[{"type":"command","command":"notify-send done"}]}]}}'
+printf '%s\n' "$THEIR_SETTINGS" >"$H/.claude/settings.json"
+PLUGIN="$H/.config/opencode/plugins/agent-usage.js"
 
 # --- first install
 run bash "$ROOT/get.sh" >"$T/get.log" 2>&1
 check "get.sh succeeds" "$?" "0"
 check "it installs the newest release" "$(installed)" "0.6.0"
+check "it adds the session hooks to Claude Code, after theirs" \
+  "$(jq -r '[.theme, (.hooks.Stop | length), .hooks.Stop[0].hooks[0].command, (.hooks.Stop[1].hooks[0].command | test("agent-usage-session hook claude$"))] | join(" ")' "$H/.claude/settings.json")" \
+  "dark 2 notify-send done true"
+check "through a link to the installed extension" "$(readlink "$H/.local/bin/agent-usage-session")" "$EXT/hooks/agent-usage-session"
+check "and the plugin to OpenCode" "$(cmp -s "$PLUGIN" "$ROOT/agent-usage@local/hooks/opencode-agent-usage.js" && echo same)" "same"
+check "and says so" "$(grep -c 'added the session' "$T/get.log")" "2"
 check "from a clone in ~/.local/share/agent-usage-gnome" "$(git -C "$CLONE" describe --tags --match 'v[0-9]*' 2>/dev/null)" "v0.6.0"
 check "the extension knows where it came from" "$(cat "$EXT/source" 2>/dev/null)" "$CLONE"
 check "the agent-usage command is on the PATH" "$(readlink "$CLI")" "$CLONE/bin/agent-usage"
@@ -123,6 +136,8 @@ run "$CLI" uninstall >"$T/uninstall.log" 2>&1
 check "uninstall succeeds" "$?" "0"
 check "and removes the extension, the clone and the command" \
   "$([[ -e $EXT ]] && echo ext) $([[ -e $CLONE ]] && echo clone) $([[ -L $CLI ]] && echo cli)" "  "
+check "and the session hooks, leaving theirs" "$(jq -c . "$H/.claude/settings.json")" "$(jq -c . <<<"$THEIR_SETTINGS")"
+check "and the plugin and the link" "$([[ -e $PLUGIN ]] && echo plugin) $([[ -L $H/.local/bin/agent-usage-session ]] && echo link)" " "
 
 # --- Linux Mint: the same get.sh in a Cinnamon session installs the applet
 M="$T/mint"
@@ -140,15 +155,20 @@ APPLET="$M/.local/share/cinnamon/applets/agent-usage@local"
 MCLONE="$M/.local/share/agent-usage-gnome"
 MCLI="$M/.local/bin/agent-usage"
 applet_version() { jq -r '.version' "$APPLET/metadata.json" 2>/dev/null; }
+# Session colors switched off in an earlier install's settings.
+mkdir -p "$M/.claude" "$M/.config/cinnamon/spices/agent-usage@local"
+echo '{"session-colors": {"type": "switch", "default": true, "value": false}}' >"$M/.config/cinnamon/spices/agent-usage@local/41.json"
 
 mint bash "$ROOT/get.sh" >"$T/mint-get.log" 2>&1
 check "on Cinnamon, get.sh succeeds" "$?" "0"
+check "with Session colors switched off, Claude Code and OpenCode are left alone" \
+  "$([[ -e $M/.claude/settings.json ]] && echo hooks) $([[ -e $M/.config/opencode ]] && echo plugin) $(grep -c 'Switched off in the settings' "$T/mint-get.log")" "  1"
 check "it installs the applet, not the extension" \
   "$(applet_version) $([[ -e $M/.local/share/gnome-shell ]] && echo extension)" "0.6.1 "
 check "the applet knows where it came from" "$(cat "$APPLET/source" 2>/dev/null)" "$MCLONE"
-check "it's built: Cinnamon's files, the converted modules, the collectors" \
-  "$(cd "$APPLET" 2>/dev/null && ls applet.js bin/agent-usage-claude panel.js settings-schema.json usage.js 2>&1 | tr '\n' ' ')" \
-  "applet.js bin/agent-usage-claude panel.js settings-schema.json usage.js "
+check "it's built: Cinnamon's files, the converted modules, the collectors, the session hooks" \
+  "$(cd "$APPLET" 2>/dev/null && ls applet.js bin/agent-usage-claude hooks/agent-usage-session panel.js sessions.js settings-schema.json usage.js 2>&1 | tr '\n' ' ')" \
+  "applet.js bin/agent-usage-claude hooks/agent-usage-session panel.js sessions.js settings-schema.json usage.js "
 check "its settings window shows the version" "$(jq -r '.version.description' "$APPLET/settings-schema.json" 2>/dev/null)" \
   "Version: v0.6.1. The panel's bottom line says when a newer one is out."
 check "a first install adds it to the panel, first in the zone with the status icons" "$(cat "$MS/enabled-applets")" \

@@ -19,6 +19,11 @@
       <summary>Show the session limit in the top bar from this percentage</summary>
       <description>Once the 5-hour session limit is at least this full, the top bar shows it, even when the weekly limit is fuller. Below it, the top bar shows the fullest limit. 0 always shows the session limit.</description>
     </key>
+    <key name="session-colors" type="b">
+      <default>true</default>
+      <summary>Color the robot by what the agent sessions want</summary>
+      <description>Orange while a Claude Code or OpenCode session waits for you (a permission, a question), green once one has finished its turn, until you open the panel. Needs hooks in Claude Code and a plugin in OpenCode, which follow this setting: switching it off removes them.</description>
+    </key>
     <key name="check-updates" type="b">
       <default>true</default>
       <summary>Check for new releases</summary>

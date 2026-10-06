@@ -9,6 +9,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import System from 'system';
 
+import * as Sessions from '../agent-usage@local/sessions.js';
 import * as Terminals from '../agent-usage@local/terminals.js';
 import * as Updates from '../agent-usage@local/updates.js';
 import * as Usage from '../agent-usage@local/usage.js';
@@ -44,7 +45,7 @@ function convert(source) {
     return {ok: proc.get_successful(), stdout, stderr: stderr.trim()};
 }
 
-const MODULES = {usage: Usage, updates: Updates, versions: Versions, terminals: Terminals};
+const MODULES = {usage: Usage, updates: Updates, versions: Versions, terminals: Terminals, sessions: Sessions};
 for (const name of [...Object.keys(MODULES), 'panel']) {
     const result = convert(`${ROOT}/agent-usage@local/${name}.js`);
     check(`${name}.js converts`, result.stderr, '');
@@ -120,7 +121,7 @@ for (const [name, esm] of Object.entries(MODULES)) {
 }
 
 for (const [version, modules] of [['6.0–6.6', before68], ['6.8', native68]]) {
-    const {usage, updates, versions, terminals, sibling} = modules;
+    const {usage, updates, versions, terminals, sessions, sibling} = modules;
     check(`Cinnamon ${version}: formatting and model names`,
         [usage.formatTokens(1234567), usage.friendlyModelName('claude-opus-4-8'), usage.windowTitle('5h window')],
         [Usage.formatTokens(1234567), Usage.friendlyModelName('claude-opus-4-8'), Usage.windowTitle('5h window')]);
@@ -132,11 +133,14 @@ for (const [version, modules] of [['6.0–6.6', before68], ['6.8', native68]]) {
     const find = name => ({opencode: '/usr/bin/opencode', 'gnome-terminal': '/usr/bin/gnome-terminal', tilix: '/usr/bin/tilix'})[name] ?? null;
     const prefs = {agent: 'opencode', agentCommand: '', terminal: 'auto', terminalCommand: '', preferredTerminal: terminals.preferredTerminal('tilix', '-e')};
     check(`Cinnamon ${version}: terminals`, terminals.resolveLaunch(prefs, find, () => null), Terminals.resolveLaunch(prefs, find, () => null));
+    const waiting = {state: 'waiting', updated: 1000, since: 1000};
+    check(`Cinnamon ${version}: sessions`, [sessions.topBarSession([waiting], {now: 2000}), sessions.parseSeen('5'), sessions.SEEN_FILE],
+        ['waiting', 5, '.seen']);
     check(`Cinnamon ${version}: a module that imports its siblings`, [sibling.tokens(1500), sibling.NEWER], ['1.5K', true]);
 }
 check('panel.js compiles for Cinnamon', before68.panel, null);
 check("panel.js loads its siblings through the loader", read(`${APPLET}/panel.js`).match(/_load\('[\w-]+'\)/g),
-    ["_load('terminals')", "_load('updates')", "_load('usage')", "_load('versions')"]);
+    ["_load('sessions')", "_load('terminals')", "_load('updates')", "_load('usage')", "_load('versions')"]);
 
 // What the converter refuses rather than gets wrong.
 const refused = {

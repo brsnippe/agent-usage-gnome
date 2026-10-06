@@ -15,7 +15,7 @@
     "panel": {
       "type": "section",
       "title": "Panel",
-      "keys": ["session-threshold"]
+      "keys": ["session-threshold", "session-colors"]
     },
     "launch": {
       "type": "section",
@@ -61,6 +61,12 @@
     "units": "percent",
     "description": "Show the session limit from",
     "tooltip": "Once the 5-hour session limit is this full, the panel shows it, even when the weekly limit is fuller. Below it, the panel shows the fullest limit. 0 always shows the session limit."
+  },
+  "session-colors": {
+    "type": "switch",
+    "default": true,
+    "description": "Session colors",
+    "tooltip": "The robot turns orange while a Claude Code or OpenCode session waits for you, and green once one has finished, until you open the panel. Works through hooks in Claude Code and a plugin in OpenCode 2; switching this off removes them."
   },
   "launch-note": {
     "type": "label",

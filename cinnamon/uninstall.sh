@@ -13,6 +13,8 @@ BIN_DIR="$HOME/.local/bin"
 # shellcheck source=../scripts/common.sh
 source "$ROOT/scripts/common.sh"
 
+remove_session_hooks "$ROOT/agent-usage@local/hooks/agent-usage-session"
+
 # Cinnamon unloads an applet as soon as it leaves enabled-applets.
 if current=$(gsettings get org.cinnamon enabled-applets 2>/dev/null); then
   updated=$(python3 - "$current" "$UUID" <<'PY'

@@ -13,16 +13,24 @@ final class AppModel {
     var onOpenSettings: (() -> Void)?
 
     private(set) var providers: [AgentRecord] = []
+    /// What the agent sessions want, for the robot's colour.
+    private(set) var session: TopBarSession?
     private var records: [AgentRecord] = []
     private var queue = UpdateQueue()
     private let home: String
     private let usageDir: String
+    private let sessionsDir: String
+    private let sessionHooks: String?
     private let collectors: [Collector]
     private let python: String?
     private let environment: [String: String]
     private let worker = DispatchQueue(label: "agent-usage.collectors")
     private var watcher: DispatchSourceFileSystemObject?
+    private var sessionsWatcher: DispatchSourceFileSystemObject?
     private var reloadScheduled = false
+    private var sessionsReloadScheduled = false
+    private var sessionsTimer: Timer?
+    private var appliedSessionColors = true
     private var timers: [Timer] = []
     private var retryTimer: Timer?
     private var releaseTimer: Timer?
@@ -49,11 +57,16 @@ final class AppModel {
     /// many times, until the problem is gone.
     static let signInCheckSeconds: TimeInterval = 15
     static let signInChecks = 20
+    /// While there are session files: look again this often, since an agent
+    /// that goes away doesn't change any file.
+    static let sessionsCheckSeconds: TimeInterval = 30
 
     init() {
         let base = ProcessInfo.processInfo.environment
         home = base["HOME"].flatMap { $0.isEmpty ? nil : $0 } ?? NSHomeDirectory()
         usageDir = Collectors.usageDirectory(environment: base, home: home)
+        sessionsDir = Sessions.directory(environment: base, home: home)
+        sessionHooks = Bundle.main.resourceURL?.appendingPathComponent("hooks/agent-usage-session").path
         collectors = Collectors.find(in: Bundle.main.resourceURL?.appendingPathComponent("bin").path ?? "")
         python = Collectors.findPython()
         environment = Collectors.environment(base: base, home: home)
@@ -73,11 +86,17 @@ final class AppModel {
 
     func start() {
         try? FileManager.default.createDirectory(atPath: usageDir, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(atPath: sessionsDir, withIntermediateDirectories: true)
         reload()
-        watch()
+        loadSessions()
+        watcher = watch(usageDir) { [weak self] in self?.scheduleReload() }
+        sessionsWatcher = watch(sessionsDir) { [weak self] in self?.scheduleSessions() }
         observeSystem()
         appliedSettings = settingsKey
         appliedSessionThreshold = UserDefaults.standard.integer(forKey: Settings.sessionThreshold)
+        appliedSessionColors = UserDefaults.standard.bool(forKey: Settings.sessionColors)
+        // Every start, so an agent installed since gets its hooks too.
+        applySessionHooks()
         runUpdate(.normal)
         restartTimers()
         restartReleaseChecks()
@@ -85,16 +104,16 @@ final class AppModel {
 
     // ------------------------------------------------------------ data
 
-    private func watch() {
-        let descriptor = open(usageDir, O_EVTONLY)
+    private func watch(_ dir: String, _ handler: @escaping () -> Void) -> DispatchSourceFileSystemObject? {
+        let descriptor = open(dir, O_EVTONLY)
         guard descriptor >= 0 else {
-            return
+            return nil
         }
         let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: descriptor, eventMask: [.write, .rename, .delete], queue: .main)
-        source.setEventHandler { [weak self] in self?.scheduleReload() }
+        source.setEventHandler(handler: handler)
         source.setCancelHandler { close(descriptor) }
         source.resume()
-        watcher = source
+        return source
     }
 
     /// One update writes several files in quick succession; reload once.
@@ -171,6 +190,73 @@ final class AppModel {
         }
     }
 
+    // ------------------------------------------------------------ sessions
+
+    /// A hook writes its file through a temporary one; look once.
+    private func scheduleSessions() {
+        guard !sessionsReloadScheduled else {
+            return
+        }
+        sessionsReloadScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            self?.sessionsReloadScheduled = false
+            self?.loadSessions()
+        }
+    }
+
+    private func loadSessions() {
+        let records = UserDefaults.standard.bool(forKey: Settings.sessionColors) ? Sessions.load(from: sessionsDir) : []
+        let seen = Sessions.parseSeen(try? String(contentsOfFile: "\(sessionsDir)/\(Sessions.seenFile)", encoding: .utf8))
+        let next = Sessions.topBar(records, now: Date().timeIntervalSince1970 * 1000, seen: seen, alive: Sessions.processRunning)
+        sessionsTimer?.invalidate()
+        sessionsTimer = nil
+        if !records.isEmpty {
+            sessionsTimer = Timer.scheduledTimer(withTimeInterval: Self.sessionsCheckSeconds, repeats: false) { [weak self] _ in
+                self?.loadSessions()
+            }
+        }
+        if next != session {
+            session = next
+            onRecordsChange?()
+        }
+    }
+
+    /// You looked: the turns that finished so far stop turning the robot green.
+    private func acknowledgeSessions() {
+        let now = String(Int64(Date().timeIntervalSince1970 * 1000))
+        try? now.write(toFile: "\(sessionsDir)/\(Sessions.seenFile)", atomically: true, encoding: .utf8)
+        loadSessions()
+    }
+
+    /// The hooks in Claude Code and the plugin in OpenCode follow the setting.
+    private func applySessionHooks() {
+        guard let python, let script = sessionHooks, FileManager.default.fileExists(atPath: script) else {
+            return
+        }
+        let action = UserDefaults.standard.bool(forKey: Settings.sessionColors) ? "install" : "uninstall"
+        let environment = self.environment
+        DispatchQueue.global(qos: .utility).async {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: python)
+            process.arguments = [script, action, "--quiet"]
+            process.environment = environment
+            let errors = Pipe()
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = errors
+            do {
+                try process.run()
+                let output = String(decoding: errors.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+                process.waitUntilExit()
+                let message = output.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !message.isEmpty {
+                    DispatchQueue.main.async { Log.write("session hooks: \(message)") }
+                }
+            } catch {
+                DispatchQueue.main.async { Log.write("session hooks: \(error.localizedDescription)") }
+            }
+        }
+    }
+
     /// A collector that couldn't reach its limits endpoint at all (typically
     /// right after login, before the network is up) asks to be rerun sooner.
     private func scheduleRetry() {
@@ -240,6 +326,12 @@ final class AppModel {
             appliedSessionThreshold = sessionThreshold
             onRecordsChange?()
         }
+        let sessionColors = UserDefaults.standard.bool(forKey: Settings.sessionColors)
+        if sessionColors != appliedSessionColors {
+            appliedSessionColors = sessionColors
+            applySessionHooks()
+            loadSessions()
+        }
         let key = settingsKey
         guard key != appliedSettings else {
             return
@@ -290,6 +382,7 @@ final class AppModel {
     // ------------------------------------------------------------ panel
 
     func panelOpened() {
+        acknowledgeSessions()
         // Opening wants the numbers that go stale on the wire, not another walk
         // over every transcript on disk.
         runUpdate(.limits)
@@ -338,6 +431,8 @@ final class AppModel {
     }
 
     func launchAgent() {
+        // Going to your agent is looking at it.
+        acknowledgeSessions()
         switch Terminals.resolveLaunch(Settings.launchPrefs, on: machine) {
         case .success(let launch):
             do {

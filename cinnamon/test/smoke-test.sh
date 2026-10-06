@@ -60,11 +60,11 @@ shot() {
   fi
 }
 
-# The open menu, with a margin.
-shot_menu() {
+# One of the applet's actors on screen, with a margin.
+shot_actor() {
   local box
   box=$(state eval "(() => {
-      const actor = imports.ui.appletManager.getRunningInstancesForUuid('$UUID')[0].menu.actor;
+      const actor = imports.ui.appletManager.getRunningInstancesForUuid('$UUID')[0]$2;
       const [x, y] = actor.get_transformed_position();
       const [w, h] = actor.get_transformed_size();
       const left = Math.max(0, Math.round(x - 8)), top = Math.max(0, Math.round(y - 8));
@@ -74,6 +74,30 @@ shot_menu() {
     })()")
   # shellcheck disable=SC2086
   shot "$1" $box
+}
+
+# The open menu.
+shot_menu() {
+  shot_actor "$1" ".menu.actor"
+}
+
+# A session file, as the agents' hooks write it.
+SESSIONS="${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/agents/sessions"
+session_file() {
+  local now
+  now=$(date +%s%3N)
+  mkdir -p "$SESSIONS"
+  printf '{"agent":"claude","session":"smoke","state":"%s","since":%s,"updated":%s,"pid":%s,"cwd":"%s"}\n' \
+    "$1" "$now" "$now" "$$" "$HOME" >"$SESSIONS/.claude-smoke.tmp"
+  mv "$SESSIONS/.claude-smoke.tmp" "$SESSIONS/claude-smoke.json"
+}
+
+# The color one of the applet's actors is drawn in, as rrggbb.
+color_of() {
+  state eval "(() => {
+      const color = imports.ui.appletManager.getRunningInstancesForUuid('$UUID')[0]$1.get_theme_node().get_foreground_color();
+      return [color.red, color.green, color.blue].map(value => value.toString(16).padStart(2, '0')).join('');
+    })()"
 }
 
 finish() {
@@ -121,7 +145,8 @@ shot desktop-empty
 
 # ---- a stand-in OpenCode, opened in a "terminal" set in the settings
 mkdir -p ~/.local/bin
-printf '#!/bin/sh\necho "$@" >"%s/opened"\n' "$OUT" >~/.local/bin/opencode
+# (The session hooks ask it for its version; that doesn't open anything.)
+printf '#!/bin/sh\n[ "$1" = --version ] && exit 0\necho "$@" >"%s/opened"\n' "$OUT" >~/.local/bin/opencode
 chmod +x ~/.local/bin/opencode
 settings=$(ls "${XDG_CONFIG_HOME:-$HOME/.config}/cinnamon/spices/$UUID/"*.json 2>/dev/null | head -1)
 check "Cinnamon set up the applet's settings" "$([[ -f $settings ]] && echo yes)" "yes"
@@ -186,6 +211,33 @@ check "the Codex tab has the problem card with its sign-in button" \
     })()")" "yes"
 shot_menu panel-codex
 applet ".menu.close()" >/dev/null
+sleep 1
+
+# ---- session colors: orange while a session waits for you, green once one
+# is done, until the panel is opened
+session_file waiting
+for _ in $(seq 20); do
+  [[ $(applet "._applet_icon.has_style_class_name('agent-usage-waiting')") == true ]] && break
+  sleep 0.25
+done
+check "a session waiting for you turns the robot orange" "$(color_of "._applet_icon")" "ffa066"
+check "and leaves the number as it was" \
+  "$(applet "._applet_label.get_text()") $(applet "._applet_label.has_style_class_name('agent-usage-waiting')")" "61% false"
+applet ".on_panel_height_changed()" >/dev/null
+check "and stays orange when the panel changes height" "$(applet "._applet_icon.has_style_class_name('agent-usage-waiting')")" "true"
+shot_actor topbar-waiting ".actor"
+session_file ready
+for _ in $(seq 20); do
+  [[ $(applet "._applet_icon.has_style_class_name('agent-usage-ready')") == true ]] && break
+  sleep 0.25
+done
+check "a finished turn turns it green" "$(color_of "._applet_icon")" "98bb6c"
+shot_actor topbar-ready ".actor"
+applet ".on_applet_clicked()" >/dev/null
+sleep 1
+applet ".menu.close()" >/dev/null
+check "opening the panel clears the green" "$(applet "._applet_icon.has_style_class_name('agent-usage-ready')")" "false"
+rm -f "$SESSIONS/claude-smoke.json"
 sleep 1
 
 # ---- a right click opens the agent, outside panel edit mode

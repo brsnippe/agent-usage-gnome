@@ -94,7 +94,7 @@ reinstall=false
 rm -rf "$EXT_DIR"
 mkdir -p "$(dirname "$EXT_DIR")" "$BIN_DIR"
 cp -r "$SRC/$UUID" "$EXT_DIR"
-chmod +x "$EXT_DIR"/bin/*
+chmod +x "$EXT_DIR"/bin/* "$EXT_DIR/hooks/agent-usage-session"
 glib-compile-schemas --strict "$EXT_DIR/schemas"
 jq --arg version "$VERSION_NAME" '.["version-name"] = $version' "$SRC/$UUID/metadata.json" >"$EXT_DIR/metadata.json"
 ln -sf "$EXT_DIR/bin/agent-usage-update" "$BIN_DIR/agent-usage-update"
@@ -119,6 +119,10 @@ if ! gnome-extensions enable "$UUID" 2>/dev/null; then
 fi
 echo "  Enabled."
 
+# Kept as it was, when someone switched it off.
+colors=$(gsettings --schemadir "$EXT_DIR/schemas" get org.gnome.shell.extensions.agent-usage session-colors 2>/dev/null || true)
+install_session_hooks "$EXT_DIR/hooks/agent-usage-session" "$colors"
+
 step "Collecting usage"
 "$EXT_DIR/bin/agent-usage-update" --force || note "A collector failed; the messages above say which."
 summarize_usage || note "No agent has usage yet, so the icon stays hidden until one does. Sign in with: claude auth login / codex login"
@@ -135,7 +139,7 @@ else
   echo "  To load it: log out and back in."
   echo "  To look at it right now without logging out: $SRC/preview.sh"
 fi
-echo "  Settings (refresh intervals, agent, terminal, updates): the ⚙ button in the panel, or: gnome-extensions prefs $UUID"
+echo "  Settings (refresh intervals, session colors, agent, terminal, updates): the ⚙ button in the panel, or: gnome-extensions prefs $UUID"
 if $FROM_GIT; then
   echo "  Updates: agent-usage update (the panel also says when there's a new version)"
   echo "  If something looks wrong: agent-usage diagnose"

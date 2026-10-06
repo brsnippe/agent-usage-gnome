@@ -9,8 +9,13 @@
 // ~/.local/state/omarchy/agents/usage/; the panel watches that folder and
 // draws whatever is there.
 //
+// It also watches ~/.local/state/omarchy/agents/sessions/, where the agents'
+// hooks say which sessions want you (see sessions.js), for the robot's color.
+//
 // The host:
-//   showTopBar({hasUsage, text, alarming, stale})  the icon and percentage in the bar
+//   showTopBar({hasUsage, text, alarming, stale, session})  the icon and
+//                         percentage in the bar; session is 'waiting', 'ready'
+//                         or null
 //   closeMenu(), isMenuOpen(), keepFocus(), scrollToTop()
 //   openSettings()        the settings window
 //   openUpdate()          what clicking "vX.Y.Z available" does
@@ -28,6 +33,7 @@ import GLib from 'gi://GLib';
 import Pango from 'gi://Pango';
 import St from 'gi://St';
 
+import * as Sessions from './sessions.js';
 import * as Terminals from './terminals.js';
 import {UpdateQueue, updateArgv} from './updates.js';
 import * as Usage from './usage.js';
@@ -47,6 +53,9 @@ const WAKE_RELEASE_CHECK_SECONDS = 15 * 60;
 // times, until the problem is gone.
 const SIGN_IN_CHECK_SECONDS = 15;
 const SIGN_IN_CHECKS = 20;
+// While there are session files: look again this often, since a process that
+// goes away doesn't change any file.
+const SESSIONS_CHECK_SECONDS = 30;
 const LAUNCH_KEYS = ['agent', 'agent-command', 'terminal', 'terminal-command'];
 
 // Kanagawa, as Omarchy draws it. The bars are painted with Cairo, so they
@@ -111,6 +120,41 @@ function separator() {
     return new St.Widget({style_class: 'agent-usage-separator', x_expand: true});
 }
 
+// The JSON files in a folder, by name; dotfiles are other things, or files
+// still being written.
+function readJsonFiles(path) {
+    const dir = Gio.File.new_for_path(path);
+    const names = [];
+    try {
+        const enumerator = dir.enumerate_children('standard::name', Gio.FileQueryInfoFlags.NONE, null);
+        let info;
+        while ((info = enumerator.next_file(null))) {
+            const name = info.get_name();
+            if (name.endsWith('.json') && !name.startsWith('.'))
+                names.push(name);
+        }
+        enumerator.close(null);
+    } catch {
+        return [];
+    }
+    const decoder = new TextDecoder();
+    const contents = [];
+    for (const name of names.sort()) {
+        try {
+            const [, bytes] = dir.get_child(name).load_contents(null);
+            contents.push(JSON.parse(decoder.decode(bytes)));
+        } catch {
+            // Mid-write or malformed: skip it until the next change.
+        }
+    }
+    return contents;
+}
+
+// Linux has a /proc entry for every running process.
+function processRunning(pid) {
+    return GLib.file_test(`/proc/${pid}`, GLib.FileTest.EXISTS);
+}
+
 // The installer records the git checkout a git install came from; installs
 // from a tarball have none and never check for releases.
 function readSourceDir(path) {
@@ -129,7 +173,13 @@ export class PanelController {
         this._settings = settings;
         this._host = host;
         this._updater = `${path}/bin/agent-usage-update`;
+        this._sessionHooks = `${path}/hooks/agent-usage-session`;
         this._usageDir = `${GLib.get_user_state_dir()}/omarchy/agents/usage`;
+        this._sessionsDir = `${GLib.get_user_state_dir()}/omarchy/agents/sessions`;
+        this._session = null;
+        this._sessionsMonitor = null;
+        this._sessionsReloadId = 0;
+        this._sessionsCheckId = 0;
         this._records = [];
         this._recordsKey = null;
         this._providers = [];
@@ -178,6 +228,14 @@ export class PanelController {
             this._settingsIds.push(this._settings.connect(`changed::${key}`, () => this._buildPanel()));
         this._settingsIds.push(this._settings.connect('changed::check-updates', () => this._restartReleaseChecks()));
         this._settingsIds.push(this._settings.connect('changed::session-threshold', () => this._showPercent()));
+        this._settingsIds.push(this._settings.connect('changed::session-colors', () => {
+            this._applySessionHooks();
+            this._loadSessions();
+        }));
+
+        GLib.mkdir_with_parents(this._sessionsDir, 0o755);
+        this._sessionsMonitor = Gio.File.new_for_path(this._sessionsDir).monitor_directory(Gio.FileMonitorFlags.WATCH_MOVES, null);
+        this._sessionsMonitor.connect('changed', () => this._scheduleSessions());
 
         // logind announces suspend and resume. With lock-on-suspend (Ubuntu's
         // default) GNOME re-enables extensions at unlock, which refreshes too;
@@ -192,6 +250,9 @@ export class PanelController {
             });
 
         this._reload();
+        this._loadSessions();
+        // Every start, so an agent installed since gets its hooks too.
+        this._applySessionHooks();
         this._runUpdate('normal');
         this._restartTimers();
         this._restartReleaseChecks();
@@ -208,6 +269,8 @@ export class PanelController {
         }
         this._monitor?.cancel();
         this._monitor = null;
+        this._sessionsMonitor?.cancel();
+        this._sessionsMonitor = null;
         for (const id of this._sources)
             GLib.source_remove(id);
         this._sources.clear();
@@ -245,6 +308,8 @@ export class PanelController {
     }
 
     launchAgent() {
+        // Going to your agent is looking at it.
+        this._acknowledgeSessions();
         const launch = this._launch();
         if (launch.error) {
             this._host.notify(launch.error);
@@ -258,6 +323,7 @@ export class PanelController {
 
     onMenuOpenChanged(open) {
         if (open) {
+            this._acknowledgeSessions();
             // Opening wants the numbers that go stale on the wire, not another
             // walk over every transcript on disk.
             this._runUpdate('limits');
@@ -409,33 +475,7 @@ export class PanelController {
     }
 
     _loadRecords() {
-        const dir = Gio.File.new_for_path(this._usageDir);
-        const names = [];
-        try {
-            const enumerator = dir.enumerate_children('standard::name', Gio.FileQueryInfoFlags.NONE, null);
-            let info;
-            while ((info = enumerator.next_file(null))) {
-                const name = info.get_name();
-                if (name.endsWith('.json') && !name.startsWith('.'))
-                    names.push(name);
-            }
-            enumerator.close(null);
-        } catch {
-            return [];
-        }
-        const decoder = new TextDecoder();
-        const records = [];
-        for (const name of names.sort()) {
-            try {
-                const [, bytes] = dir.get_child(name).load_contents(null);
-                const record = JSON.parse(decoder.decode(bytes));
-                if (record && typeof record === 'object' && record.id)
-                    records.push(record);
-            } catch {
-                // A record mid-write or malformed: skip it until the next change.
-            }
-        }
-        return records;
+        return readJsonFiles(this._usageDir).filter(record => record && typeof record === 'object' && record.id);
     }
 
     _reload() {
@@ -508,6 +548,80 @@ export class PanelController {
         }));
     }
 
+    // ------------------------------------------------------------ sessions
+
+    _scheduleSessions() {
+        // A hook writes its file through a temporary one; look once.
+        if (this._sessionsReloadId)
+            return;
+        this._sessionsReloadId = this._addSource(GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, () => {
+            this._sources.delete(this._sessionsReloadId);
+            this._sessionsReloadId = 0;
+            this._loadSessions();
+            return GLib.SOURCE_REMOVE;
+        }));
+    }
+
+    _loadSessions() {
+        const records = this._settings.get_boolean('session-colors') ? readJsonFiles(this._sessionsDir) : [];
+        const session = Sessions.topBarSession(records, {now: Date.now(), seen: this._readSeen(), alive: processRunning});
+        this._sessionsCheckId = this._removeSource(this._sessionsCheckId);
+        if (records.length > 0) {
+            this._sessionsCheckId = this._addSource(GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, SESSIONS_CHECK_SECONDS, () => {
+                this._sources.delete(this._sessionsCheckId);
+                this._sessionsCheckId = 0;
+                this._loadSessions();
+                return GLib.SOURCE_REMOVE;
+            }));
+        }
+        if (session !== this._session) {
+            this._session = session;
+            this._showPercent();
+        }
+    }
+
+    _readSeen() {
+        try {
+            const [, bytes] = GLib.file_get_contents(`${this._sessionsDir}/${Sessions.SEEN_FILE}`);
+            return Sessions.parseSeen(new TextDecoder().decode(bytes));
+        } catch {
+            return 0;
+        }
+    }
+
+    // You looked: the turns that finished so far stop turning the robot green.
+    _acknowledgeSessions() {
+        try {
+            GLib.file_set_contents(`${this._sessionsDir}/${Sessions.SEEN_FILE}`, String(Date.now()));
+        } catch (e) {
+            console.warn(`agent-usage: ${e.message}`);
+        }
+        this._loadSessions();
+    }
+
+    // The hooks in Claude Code and the plugin in OpenCode follow the setting.
+    _applySessionHooks() {
+        const action = this._settings.get_boolean('session-colors') ? 'install' : 'uninstall';
+        let proc;
+        try {
+            proc = Gio.Subprocess.new([this._sessionHooks, action, '--quiet'],
+                Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_PIPE);
+        } catch (e) {
+            console.warn(`agent-usage: could not run ${this._sessionHooks}: ${e.message}`);
+            return;
+        }
+        proc.communicate_utf8_async(null, this._cancellable, (_proc, result) => {
+            try {
+                const [, , stderr] = proc.communicate_utf8_finish(result);
+                if (stderr && stderr.trim())
+                    console.warn(`agent-usage: ${stderr.trim()}`);
+            } catch (e) {
+                if (!e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
+                    console.warn(`agent-usage: ${e.message}`);
+            }
+        });
+    }
+
     _launch() {
         return Terminals.resolveLaunch(this.launchSettings());
     }
@@ -578,6 +692,7 @@ export class PanelController {
             alarming: this._providers.some(Usage.isAlarming),
             // A percentage from an earlier check fades, so it doesn't pass for live.
             stale: this._providers.some(Usage.limitsStale),
+            session: this._session,
         });
     }
 

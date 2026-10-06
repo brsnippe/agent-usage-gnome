@@ -32,3 +32,14 @@
 .applet-box .applet-label.agent-usage-alarm {
   color: #c34043;
 }
+
+/* The robot while a session waits for you, and once one is done. */
+.applet-box .system-status-icon.agent-usage-waiting,
+.applet-box .applet-icon.agent-usage-waiting {
+  color: #ffa066;
+}
+
+.applet-box .system-status-icon.agent-usage-ready,
+.applet-box .applet-icon.agent-usage-ready {
+  color: #98bb6c;
+}

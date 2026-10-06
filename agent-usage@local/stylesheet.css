@@ -1,5 +1,6 @@
 /* Omarchy's Agents panel in its Kanagawa theme.
  *   background #1f1f28   text and border #dcd7ba   dim #8e8b78   urgent #c34043
+ *   a session waits for you #ffa066   a session is done #98bb6c
  * The bars are drawn in extension.js and use the same colors. */
 
 /* ---- top bar */
@@ -10,6 +11,14 @@
 
 .agent-usage-alarm {
   color: #c34043;
+}
+
+.agent-usage-waiting {
+  color: #ffa066;
+}
+
+.agent-usage-ready {
+  color: #98bb6c;
 }
 
 /* ---- popup */

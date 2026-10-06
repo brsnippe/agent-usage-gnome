@@ -1,0 +1,513 @@
+#!/usr/bin/python3
+"""Which agent sessions want you: the session colors' side in the agents.
+
+  agent-usage-session hook claude         Claude Code's hooks run this, with the event on stdin
+  agent-usage-session install [--quiet]   add the hooks to Claude Code and the plugin to OpenCode
+  agent-usage-session uninstall [--quiet] take them out again
+  agent-usage-session status              what's installed, and the sessions right now
+
+Each session gets a small JSON file in ~/.local/state/omarchy/agents/sessions/
+(see sessions.js), which the panel watches. Claude Code writes its files
+through this script; OpenCode through opencode-agent-usage.js next to it,
+which `install` copies to ~/.config/opencode/plugins/.
+
+`install` is safe to run again and again: the panel runs it every time it
+starts, so an agent installed later gets its hooks too. It leaves every other
+setting and hook alone, and writes nothing when nothing changes. Written for
+the Python 3.9 that comes with Apple's Command Line Tools.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+HOME = Path.home()
+SELF = Path(__file__).resolve()
+PLUGIN_SOURCE = SELF.parent / "opencode-agent-usage.js"
+PLUGIN_ID = "agent-usage.sessions"
+# Claude Code's hooks call the script through this link, so updates and
+# reinstalls never have to touch Claude Code's settings again.
+LINK = HOME / ".local" / "bin" / "agent-usage-session"
+MARKER = "agent-usage-session"
+
+STATES = ("idle", "working", "waiting", "ready")
+MAX_AGE_MS = 24 * 60 * 60 * 1000
+SHELLS = {"sh", "bash", "dash", "zsh", "fish"}
+
+# Claude Code's hook events: (event, matcher, run in the background). The
+# turn's edges run in the foreground, which takes a few hundredths of a second:
+# a background hook can be cut off when `claude -p` exits right after `Stop`.
+# The tool hooks fire after every tool call and only ever end a wait.
+CLAUDE_HOOKS = [
+    ("SessionStart", None, False),
+    ("UserPromptSubmit", None, False),
+    ("PreToolUse", "AskUserQuestion|ExitPlanMode", False),
+    ("PermissionRequest", None, False),
+    ("Elicitation", None, False),
+    ("PostToolUse", None, True),
+    ("PostToolUseFailure", None, True),
+    ("ElicitationResult", None, True),
+    ("Stop", None, False),
+    ("StopFailure", None, False),
+    ("SessionEnd", None, False),
+]
+WAITING_TOOLS = {"AskUserQuestion", "ExitPlanMode"}
+
+# Where `opencode` can be when the panel's PATH doesn't have it, as
+# terminals.js looks for agents.
+OPENCODE_DIRS = [
+    "~/.opencode/bin", "~/.local/bin", "~/.npm-global/bin", "~/.bun/bin", "~/.cargo/bin",
+    "~/.local/share/mise/shims", "/opt/homebrew/bin", "/usr/local/bin", "/snap/bin",
+]
+
+
+def now_ms() -> int:
+    return int(time.time() * 1000)
+
+
+def shown(path: Path) -> str:
+    text = str(path)
+    home = str(HOME)
+    return "~" + text[len(home):] if text == home or text.startswith(home + os.sep) else text
+
+
+def sessions_dir() -> Path:
+    state = os.environ.get("XDG_STATE_HOME") or str(HOME / ".local" / "state")
+    return Path(state) / "omarchy" / "agents" / "sessions"
+
+
+def session_path(agent: str, session: str) -> Path:
+    safe = re.sub(r"[^A-Za-z0-9_.-]", "_", session)[:128]
+    return sessions_dir() / f"{agent}-{safe}.json"
+
+
+def read_json(path: Path):
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return json.load(handle)
+    except (OSError, ValueError):
+        return None
+
+
+def write_atomic(path: Path, text: str, mode: int | None = None) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        if mode is not None:
+            os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def remove(path: Path) -> None:
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        pass
+
+
+def pid_alive(pid) -> bool:
+    if not isinstance(pid, int) or pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def process_info(pid: int):
+    """A process's name and parent, from /proc on Linux and `ps` elsewhere."""
+    try:
+        with open(f"/proc/{pid}/stat", encoding="utf-8") as handle:
+            stat = handle.read()
+        return stat[stat.index("(") + 1:stat.rindex(")")], int(stat.rsplit(")", 1)[1].split()[1])
+    except (OSError, ValueError, IndexError):
+        pass
+    if sys.platform != "darwin":
+        return None
+    try:
+        output = subprocess.run(["ps", "-o", "ppid=", "-o", "comm=", "-p", str(pid)],
+                                capture_output=True, text=True, timeout=5).stdout.split(None, 1)
+        return os.path.basename(output[1].strip()), int(output[0])
+    except (OSError, subprocess.SubprocessError, ValueError, IndexError):
+        return None
+
+
+def agent_pid() -> int:
+    """The agent that ran this hook: the parent process, or the one above it
+    when a shell sat in between. `sh -c` with a single command normally hands
+    over to it, but not every shell does."""
+    pid = os.getppid()
+    info = process_info(pid)
+    if info and info[0].lstrip("-") in SHELLS and info[1] > 1:
+        return info[1]
+    return pid
+
+
+# ---------------------------------------------------------------- the hook
+
+
+def prune(agent: str) -> None:
+    """Files of sessions whose agent is gone, or that nobody touched for a day."""
+    now = now_ms()
+    for path in sessions_dir().glob(f"{agent}-*.json"):
+        record = read_json(path)
+        if not isinstance(record, dict) or not pid_alive(record.get("pid")) or now - (record.get("updated") or 0) > MAX_AGE_MS:
+            remove(path)
+
+
+def claude_state(event: dict, current: dict):
+    """The session's next state for a Claude Code hook event, and who it waits
+    for, or None when the event changes nothing."""
+    name = event.get("hook_event_name")
+    agent = event.get("agent_id") or ""
+    state = current.get("state")
+    if name == "SessionStart":
+        return "idle", ""
+    if name == "UserPromptSubmit":
+        return "working", ""
+    if name in ("PermissionRequest", "Elicitation") or (name == "PreToolUse" and event.get("tool_name") in WAITING_TOOLS):
+        return "waiting", agent
+    if name in ("PostToolUse", "PostToolUseFailure", "ElicitationResult"):
+        # Only the agent that was waiting ends the wait: a subagent working
+        # alongside doesn't answer your permission prompt.
+        if state == "waiting" and current.get("waitingFor", "") == agent:
+            return "working", ""
+        return None
+    if name in ("Stop", "StopFailure"):
+        return "ready", ""
+    return None
+
+
+def hook_claude(event: dict) -> None:
+    session = str(event.get("session_id") or "")
+    if not session:
+        return
+    path = session_path("claude", session)
+    if event.get("hook_event_name") == "SessionEnd":
+        remove(path)
+        return
+    current = read_json(path)
+    current = current if isinstance(current, dict) else {}
+    change = claude_state(event, current)
+    if change is None:
+        return
+    state, waiting_for = change
+    if event.get("hook_event_name") == "SessionStart":
+        prune("claude")
+    now = now_ms()
+    record = {
+        "agent": "claude",
+        "session": session,
+        "state": state,
+        "since": current.get("since", now) if current.get("state") == state else now,
+        "updated": now,
+        "pid": agent_pid(),
+        "cwd": str(event.get("cwd") or current.get("cwd") or ""),
+    }
+    if state == "waiting":
+        record["waitingFor"] = waiting_for
+    write_atomic(path, json.dumps(record) + "\n")
+
+
+def run_hook(agent: str) -> int:
+    if agent != "claude":
+        print(f"agent-usage-session: no hooks for {agent!r}", file=sys.stderr)
+        return 2
+    try:
+        event = json.load(sys.stdin)
+    except ValueError:
+        return 0
+    if isinstance(event, dict):
+        hook_claude(event)
+    return 0
+
+
+# ---------------------------------------------------------------- Claude Code
+
+
+def claude_dir() -> Path:
+    return Path(os.environ.get("CLAUDE_CONFIG_DIR") or str(HOME / ".claude"))
+
+
+def claude_command() -> str:
+    """What Claude Code's hooks run. With the Python running this rather than
+    the script's own `#!/usr/bin/python3`: on a Mac without Apple's Command
+    Line Tools that one opens an install dialog instead of running."""
+    script = LINK if LINK.is_symlink() and LINK.resolve() == SELF else SELF
+    return f"{shlex.quote(sys.executable or '/usr/bin/python3')} {shlex.quote(str(script))} hook claude"
+
+
+def is_ours(handler) -> bool:
+    if not isinstance(handler, dict):
+        return False
+    command = handler.get("command")
+    args = handler.get("args")
+    return (isinstance(command, str) and MARKER in command) or (
+        isinstance(args, list) and any(isinstance(arg, str) and MARKER in arg for arg in args))
+
+
+def without_ours(hooks: dict) -> dict:
+    result = {}
+    for event, groups in hooks.items():
+        if not isinstance(groups, list):
+            result[event] = groups
+            continue
+        kept = []
+        for group in groups:
+            handlers = group.get("hooks") if isinstance(group, dict) else None
+            if not isinstance(handlers, list) or not any(is_ours(h) for h in handlers):
+                kept.append(group)
+                continue
+            mine_removed = [h for h in handlers if not is_ours(h)]
+            if mine_removed:
+                kept.append({**group, "hooks": mine_removed})
+        if kept or not groups:
+            result[event] = kept
+    return result
+
+
+def with_ours(hooks: dict, command: str) -> dict:
+    result = without_ours(hooks)
+    for event, matcher, background in CLAUDE_HOOKS:
+        handler = {"type": "command", "command": command, "timeout": 10}
+        if background:
+            handler["async"] = True
+        group = {"hooks": [handler]}
+        if matcher:
+            group = {"matcher": matcher, **group}
+        groups = result.get(event)
+        result[event] = (groups if isinstance(groups, list) else []) + [group]
+    return result
+
+
+def edit_claude_settings(install: bool) -> str:
+    """Adds or takes out the hooks; says what happened."""
+    directory = claude_dir()
+    path = directory / "settings.json"
+    if install and not directory.is_dir():
+        return "Claude Code: not set up here (no " + shown(directory) + "), skipped."
+    if not path.exists():
+        if not install:
+            return ""
+        settings = {}
+    else:
+        settings = read_json(path)
+        if not isinstance(settings, dict):
+            return f"Claude Code: {shown(path)} isn't valid JSON, so it's left alone."
+    hooks = settings.get("hooks", {})
+    if not isinstance(hooks, dict):
+        return f"Claude Code: the hooks in {shown(path)} aren't the usual shape, so they're left alone."
+
+    updated = with_ours(hooks, claude_command()) if install else without_ours(hooks)
+    if updated == hooks:
+        if install:
+            return f"Claude Code: the session hooks are already in {shown(path)}."
+        return ""
+    settings = dict(settings)
+    if updated:
+        settings["hooks"] = updated
+    else:
+        settings.pop("hooks", None)
+    # A settings file linked from a dotfiles repository stays a link.
+    target = path.resolve() if path.is_symlink() else path
+    mode = target.stat().st_mode & 0o777 if target.exists() else None
+    write_atomic(target, json.dumps(settings, indent=2, ensure_ascii=False) + "\n", mode)
+    if install:
+        return f"Claude Code: added the session hooks to {shown(path)}."
+    return f"Claude Code: took the session hooks out of {shown(path)}."
+
+
+def claude_status() -> str:
+    path = claude_dir() / "settings.json"
+    settings = read_json(path) if path.exists() else None
+    if not claude_dir().is_dir():
+        return f"not set up ({shown(claude_dir())} is missing)"
+    if not isinstance(settings, dict):
+        return f"no hooks ({shown(path)} {'is unreadable' if path.exists() else 'is missing'})"
+    hooks = settings.get("hooks") if isinstance(settings.get("hooks"), dict) else {}
+    events = [event for event, groups in hooks.items() if isinstance(groups, list) and any(
+        isinstance(group, dict) and isinstance(group.get("hooks"), list) and any(is_ours(h) for h in group["hooks"])
+        for group in groups)]
+    note = " (disableAllHooks is on, so they don't run)" if settings.get("disableAllHooks") is True else ""
+    if not events:
+        return f"no hooks in {shown(path)}"
+    return f"hooks in {shown(path)} for {len(events)} of {len(CLAUDE_HOOKS)} events{note}"
+
+
+# ---------------------------------------------------------------- OpenCode
+
+
+def opencode_dir() -> Path:
+    config = os.environ.get("XDG_CONFIG_HOME") or str(HOME / ".config")
+    return Path(config) / "opencode"
+
+
+def plugin_path() -> Path:
+    return opencode_dir() / "plugins" / "agent-usage.js"
+
+
+def find_opencode():
+    path = os.pathsep.join([os.environ.get("PATH", "")] + [os.path.expanduser(d) for d in OPENCODE_DIRS])
+    return shutil.which("opencode", path=path)
+
+
+def opencode_version(binary: str) -> str:
+    try:
+        output = subprocess.run([binary, "--version"], capture_output=True, text=True, timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    match = re.search(r"(\d+)\.(\d+)\.(\d+)", output)
+    return match.group(0) if match else ""
+
+
+def is_our_plugin(path: Path) -> bool:
+    try:
+        return PLUGIN_ID in path.read_text(encoding="utf-8")
+    except OSError:
+        return False
+
+
+def install_opencode_plugin() -> str:
+    binary = find_opencode()
+    if not binary:
+        return "OpenCode: not installed here, skipped."
+    version = opencode_version(binary)
+    if not version or int(version.split(".")[0]) < 2:
+        # Version 1 loads plugins differently, and would trip over this one.
+        return f"OpenCode: version {version or 'unknown'} is installed; the session colors need OpenCode 2, skipped."
+    target = plugin_path()
+    source = PLUGIN_SOURCE.read_text(encoding="utf-8")
+    if target.exists() and not target.is_symlink():
+        try:
+            if target.read_text(encoding="utf-8") == source:
+                return f"OpenCode: the plugin is already in {shown(target)}."
+        except OSError:
+            pass
+        if not is_our_plugin(target):
+            return f"OpenCode: {shown(target)} is someone else's file, so it's left alone."
+    write_atomic(target, source)
+    return f"OpenCode: added the session plugin to {shown(target)}."
+
+
+def remove_opencode_plugin() -> str:
+    target = plugin_path()
+    if target.exists() and is_our_plugin(target):
+        remove(target)
+        return f"OpenCode: removed the session plugin from {shown(target)}."
+    return ""
+
+
+def opencode_status() -> str:
+    target = plugin_path()
+    binary = find_opencode()
+    version = f"OpenCode {opencode_version(binary) or '?'}" if binary else "OpenCode not found"
+    if target.exists() and is_our_plugin(target):
+        current = "current" if target.read_text(encoding="utf-8") == PLUGIN_SOURCE.read_text(encoding="utf-8") else "an older version"
+        return f"plugin in {shown(target)} ({current}; {version})"
+    return f"no plugin ({version})"
+
+
+# ---------------------------------------------------------------- install
+
+
+def link_self() -> None:
+    if LINK.is_symlink() and LINK.resolve() == SELF:
+        return
+    if LINK.exists() and not LINK.is_symlink():
+        return  # someone's own file; the hooks then call this script directly
+    LINK.parent.mkdir(parents=True, exist_ok=True)
+    remove(LINK)
+    LINK.symlink_to(SELF)
+
+
+def unlink_self() -> None:
+    if LINK.is_symlink() and os.path.basename(os.readlink(LINK)) == MARKER:
+        remove(LINK)
+
+
+def install(quiet: bool) -> int:
+    link_self()
+    lines = [edit_claude_settings(install=True), install_opencode_plugin()]
+    if not quiet:
+        for line in lines:
+            print(f"  {line}")
+    return 0
+
+
+def uninstall(quiet: bool) -> int:
+    lines = [edit_claude_settings(install=False), remove_opencode_plugin()]
+    unlink_self()
+    if not quiet:
+        for line in filter(None, lines):
+            print(f"  {line}")
+    return 0
+
+
+def status() -> int:
+    print(f"claude:   {claude_status()}")
+    print(f"opencode: {opencode_status()}")
+    print(f"link:     {shown(LINK)} -> {os.readlink(LINK) if LINK.is_symlink() else 'missing'}")
+    directory = sessions_dir()
+    try:
+        seen_ms = int((directory / ".seen").read_text().strip())
+        print(f"seen:     {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(seen_ms / 1000))}")
+    except (OSError, ValueError):
+        print("seen:     never")
+    print(f"sessions in {shown(directory)}:")
+    now = now_ms()
+    found = False
+    for path in sorted(directory.glob("*.json")):
+        record = read_json(path)
+        if not isinstance(record, dict):
+            print(f"  {path.name}: unreadable")
+            continue
+        found = True
+        pid = record.get("pid")
+        age = max(0, now - int(record.get("since") or record.get("updated") or now)) // 60000
+        print(f"  {record.get('agent', '?'):8} {record.get('state', '?'):8} for {age}m  "
+              f"pid {pid} ({'running' if pid_alive(pid) else 'gone'})"
+              f"{'  subagent of ' + str(record['parent']) if record.get('parent') else ''}  {record.get('cwd', '')}")
+    if not found:
+        print("  none")
+    return 0
+
+
+def main(argv) -> int:
+    command = argv[1] if len(argv) > 1 else ""
+    quiet = "--quiet" in argv[2:]
+    if command == "hook" and len(argv) > 2:
+        return run_hook(argv[2])
+    if command == "install":
+        return install(quiet)
+    if command == "uninstall":
+        return uninstall(quiet)
+    if command == "status":
+        return status()
+    print(__doc__.strip().split("\n\n")[1], file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

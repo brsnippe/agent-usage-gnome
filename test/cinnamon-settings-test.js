@@ -30,7 +30,7 @@ const gnomeKeys = [...gschema.matchAll(/<key name="([^"]+)" type="(.)">([\s\S]*?
     return {name, type, value, range: range ? [Number(range[1]), Number(range[2])] : null};
 });
 check("GNOME's schema has the keys this test expects", gnomeKeys.map(key => key.name),
-    ['limits-interval', 'scan-interval', 'session-threshold', 'check-updates', 'agent', 'agent-command', 'terminal', 'terminal-command']);
+    ['limits-interval', 'scan-interval', 'session-threshold', 'session-colors', 'check-updates', 'agent', 'agent-command', 'terminal', 'terminal-command']);
 
 const cinnamonType = {i: 'spinbutton', b: 'switch'};
 for (const key of gnomeKeys) {

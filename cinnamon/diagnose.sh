@@ -28,6 +28,7 @@ for settings in "$SETTINGS_DIR"/*.json; do
 done
 
 print_usage_records
+print_session_colors "$APPLET_DIR/hooks/agent-usage-session"
 
 echo
 echo "== Cinnamon's log for this applet"

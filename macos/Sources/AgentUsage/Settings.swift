@@ -102,6 +102,7 @@ struct SettingsView: View {
     @AppStorage(Settings.limitsInterval) private var limits = 300
     @AppStorage(Settings.scanInterval) private var scan = 15
     @AppStorage(Settings.sessionThreshold) private var sessionFrom = 40
+    @AppStorage(Settings.sessionColors) private var sessionColors = true
     @AppStorage(Settings.agent) private var agent = "opencode"
     @AppStorage(Settings.agentCommand) private var agentCommand = ""
     @AppStorage(Settings.terminal) private var terminal = "auto"
@@ -140,10 +141,11 @@ struct SettingsView: View {
                         Stepper("Show the session limit from", value: $sessionFrom, in: 0...100, step: 5).labelsHidden()
                     }
                 }
+                Toggle("Session colors", isOn: $sessionColors)
             } header: {
                 Text("Menu bar")
             } footer: {
-                note("Once the 5-hour session limit is this full, the menu bar shows it, even when the weekly limit is fuller. Below it, the menu bar shows the fullest limit. 0% always shows the session limit.")
+                note("Once the 5-hour session limit is this full, the menu bar shows it, even when the weekly limit is fuller. Below it, the menu bar shows the fullest limit. 0% always shows the session limit. With session colors, the robot turns orange while a Claude Code or OpenCode session waits for you, and green once one has finished, until you open the panel. They work through hooks in Claude Code and a plugin in OpenCode 2; switching them off removes those.")
             }
 
             Section {

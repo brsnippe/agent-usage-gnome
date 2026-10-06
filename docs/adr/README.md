@@ -89,6 +89,7 @@ It was built iteratively with an AI coding agent: Claude Opus 5.5, running in
 | [0028](0028-shared-panel-code.md) | One panel for GNOME and Cinnamon | Accepted |
 | [0029](0029-installing-on-cinnamon.md) | Installing on Cinnamon, without logging out | Accepted |
 | [0030](0030-testing-in-real-shells.md) | Test the panels in real shells, in Docker | Accepted |
+| [0031](0031-session-colors.md) | Session colors: the robot says when an agent wants you | Accepted |
 
 ## Open items
 
@@ -133,3 +134,9 @@ It was built iteratively with an AI coding agent: Claude Opus 5.5, running in
   ([0030](0030-testing-in-real-shells.md)).
 - **Mint's MATE and Xfce editions** aren't covered
   ([0027](0027-cinnamon-applet-for-linux-mint.md)).
+- **The session colors haven't run on a coworker's machine yet**
+  ([0031](0031-session-colors.md)). What the trial has to confirm:
+  - a whole day of real sessions, several at once, subagents included;
+  - Claude Code in Claude's desktop app, and OpenCode's desktop app;
+  - the hooks on a Mac, with the Command Line Tools' Python.
+- **Codex** has no session colors ([0031](0031-session-colors.md)).
