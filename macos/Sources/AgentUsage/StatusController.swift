@@ -54,8 +54,13 @@ final class StatusController: NSObject, NSWindowDelegate {
         }
         let providers = model.providers
         let alarming = Panel.menuBarAlarming(providers)
-        button.image = Assets.robot
-        button.contentTintColor = model.session.map(Theme.sessionNS) ?? (alarming ? Theme.urgentNS : nil)
+        button.image = Assets.robot(model.session.map(Theme.sessionNS) ?? (alarming ? Theme.urgentNS : nil))
+        // What the colour says, for VoiceOver.
+        switch model.session {
+        case .waiting?: button.setAccessibilityValue("A session waits for you")
+        case .ready?: button.setAccessibilityValue("A session is done")
+        case nil: button.setAccessibilityValue(nil)
+        }
         let sessionFrom = UserDefaults.standard.integer(forKey: Settings.sessionThreshold)
         guard let text = Panel.menuBarText(providers, sessionFrom: sessionFrom) else {
             button.title = ""

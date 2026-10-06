@@ -72,6 +72,33 @@ enum Assets {
         return image
     }()
 
+    private static var tintedRobots: [NSColor: NSImage] = [:]
+
+    /// The robot for the menu bar: the template one, which macOS colours to
+    /// match the menu bar, or a copy painted in `tint`. The menu bar draws a
+    /// template image with a `contentTintColor` in black, whatever the colour
+    /// (FB8530353, since macOS 11), so the colour goes into the image itself,
+    /// which the menu bar draws as it is.
+    static func robot(_ tint: NSColor?) -> NSImage {
+        guard let tint else {
+            return robot
+        }
+        if let image = tintedRobots[tint] {
+            return image
+        }
+        let template = robot
+        // Drawn when it's shown, so it stays sharp on any screen.
+        let image = NSImage(size: template.size, flipped: false) { rect in
+            template.draw(in: rect)
+            tint.set()
+            rect.fill(using: .sourceAtop)
+            return true
+        }
+        image.isTemplate = false
+        tintedRobots[tint] = image
+        return image
+    }
+
     /// An agent's logo for the panel header, or the robot for agents without
     /// one.
     static func logo(_ id: String) -> (image: NSImage, template: Bool) {
