@@ -3,6 +3,28 @@
 Versions are git tags (`v0.6.0`, …). `agent-usage update` installs the newest
 one.
 
+## 0.12.0
+
+The robot says when an agent wants you. On GNOME, Linux Mint and a Mac.
+
+- **Session colors:** the robot turns orange while a Claude Code or OpenCode
+  session waits for you (a permission, a question, a plan to approve), and
+  green once one has finished its turn. Opening the panel, or right-clicking
+  to open your agent, clears the green. See the README's *Session colors*
+  section.
+  - A limit at 90% or more still turns the percentage red.
+  - **What it adds:** hooks in Claude Code's settings and a plugin in
+    OpenCode 2, next to your own. This update adds them too, and says so.
+    The panel adds them whenever it starts, so an agent you install later
+    gets them as well.
+  - **Switching it off:** *Session colors* in the settings switches it off
+    and takes the hooks and the plugin out again. `agent-usage uninstall`
+    takes them out too.
+- **`agent-usage diagnose`** shows what's installed for the session colors,
+  and every session's state.
+- **Tests:** the hooks and the plugin, against a stand-in OpenCode, and the
+  colors in the real GNOME Shell and Cinnamon, with screenshots.
+
 ## 0.11.0
 
 Linux Mint. And JetBrains Mono, on GNOME too.
