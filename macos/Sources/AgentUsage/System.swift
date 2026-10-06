@@ -116,13 +116,14 @@ enum Settings {
     static let agentCommand = "agentCommand"
     static let terminal = "terminal"
     static let terminalCommand = "terminalCommand"
+    static let rightClickOpensAgent = "rightClickOpensAgent"
     static let checkUpdates = "checkUpdates"
     static let loginItemConfigured = "loginItemConfigured"
 
     static func registerDefaults() {
         UserDefaults.standard.register(defaults: [
             limitsInterval: 300, scanInterval: 15, sessionThreshold: 40, sessionColors: true, agent: "opencode", agentCommand: "",
-            terminal: "auto", terminalCommand: "", checkUpdates: true,
+            terminal: "auto", terminalCommand: "", rightClickOpensAgent: true, checkUpdates: true,
         ])
     }
 

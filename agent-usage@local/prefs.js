@@ -169,6 +169,13 @@ export default class AgentUsagePreferences extends ExtensionPreferences {
             description: "What the panel's open button, and right-clicking the top-bar icon, opens: an agent in a terminal, or a desktop app.",
         });
 
+        const rightClick = new Adw.SwitchRow({
+            title: 'Right-click opens the agent',
+            subtitle: 'Off: right-click opens the panel, as left-click does.',
+        });
+        settings.bind('right-click-opens-agent', rightClick, 'active', Gio.SettingsBindFlags.DEFAULT);
+        group.add(rightClick);
+
         // Agents: all of them, marked when this machine doesn't have one.
         const agentIds = [...Terminals.AGENTS.map(agent => agent.id), 'custom'];
         const agentLabels = [

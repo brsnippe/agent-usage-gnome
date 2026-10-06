@@ -39,6 +39,7 @@ icon: see [macOS](#macos).
     the bottom.
 - **Mouse:** left-click opens the panel, middle-click refreshes, right-click
   opens your agent (OpenCode by default) in a terminal, or a desktop app.
+  Right-click can be switched off (see [Opening your agent](#opening-your-agent)).
 - **Keyboard (panel open):** ←/→ (or h/l) switches agent, `r` refreshes,
   `q` does what ⏻ does, Esc closes.
 
@@ -68,7 +69,8 @@ It clones and installs as on GNOME (see [Install](#install)), and then:
   usage to show. The open panel says why it's empty.
 - **Clicks are GNOME's:** left opens the panel, middle refreshes, right opens
   your agent. In panel edit mode, right-click shows Cinnamon's own menu
-  instead, to move or remove the applet.
+  instead, to move or remove the applet. With *Right-click opens the agent*
+  switched off, it always shows that menu.
 - **On a vertical panel** only the robot shows, without the percentage.
 - **Settings:** the panel's ⚙ button, or System Settings → Applets →
   Agent Usage. It's Cinnamon's own settings window with GNOME's options, plus
@@ -137,7 +139,8 @@ xattr -dr com.apple.quarantine "Agent Usage.app"
 - **Clicks:**
   - left-click opens the panel;
   - right-click (a two-finger click on a trackpad) or Control-click opens your
-    agent;
+    agent. With *Right-click opens the agent* switched off, both open the
+    panel;
   - middle-click refreshes, on a mouse.
 
   The keys are the same as on GNOME.
@@ -303,6 +306,16 @@ under *Open agent*:
   agent goes at the end.
 - **Try it:** shows the exact command that will run, and its *Open* button
   runs it.
+- **Right-click opens the agent:** on by default. Switched off, right-click
+  does what the desktop does by itself:
+
+  | Where | Right-click, switched off |
+  |---|---|
+  | GNOME | Opens the panel, as left-click does |
+  | Linux Mint | Cinnamon's own applet menu: *About*, *Configure…*, *Remove* |
+  | Mac | Opens the panel, as left-click does. So does Control-click |
+
+  The panel's open button opens the agent either way.
 
 The terminals and agents are looked up on your PATH, plus `~/.local/bin`,
 `~/.opencode/bin`, `~/.npm-global/bin`, `~/.bun/bin`, `~/.cargo/bin`, mise's
@@ -475,7 +488,7 @@ The extension lives in `agent-usage@local/`:
 | `extension.js` | GNOME's top-bar button and the menu around the panel |
 | `terminals.js` | Which agent or desktop app to open, how to start each terminal, and the sign-in commands. The panel and the settings window both use it |
 | `versions.js` | Compares release versions for the update notice |
-| `prefs.js`, `schemas/` | The settings window and its settings: the refresh intervals, which limit the top bar shows, the session colors, the agent, the terminal and update checks |
+| `prefs.js`, `schemas/` | The settings window and its settings: the refresh intervals, which limit the top bar shows, the session colors, the agent, the terminal, what right-click does and update checks |
 
 Around it, in the repository:
 

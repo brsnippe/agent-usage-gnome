@@ -18,6 +18,10 @@ import * as Util from 'resource:///org/gnome/shell/misc/util.js';
 
 import {PanelController} from './panel.js';
 
+// GNOME 46 to 49 open a top-bar menu in PanelMenu.Button's vfunc_event; 50
+// with a click gesture instead, and has no vfunc_event to hand events on to.
+const OPENS_IN_VFUNC_EVENT = Object.hasOwn(PanelMenu.Button.prototype, 'vfunc_event');
+
 function setStyleClass(actor, name, on) {
     if (on)
         actor.add_style_class_name(name);
@@ -29,6 +33,9 @@ const Indicator = GObject.registerClass(
 class AgentUsageIndicator extends PanelMenu.Button {
     _init(extension) {
         super._init(0.5, 'Agent usage', false);
+        // GNOME 50's gesture takes any button, before vfunc_event sees it;
+        // the middle and right ones are the indicator's own.
+        this._clickGesture?.set_required_button(Clutter.BUTTON_PRIMARY);
 
         const box = new St.BoxLayout({style_class: 'panel-status-menu-box'});
         this._icon = new St.Icon({
@@ -40,9 +47,10 @@ class AgentUsageIndicator extends PanelMenu.Button {
         box.add_child(this._label);
         this.add_child(box);
 
+        this._settings = extension.getSettings();
         this._controller = new PanelController({
             path: extension.path,
-            settings: extension.getSettings(),
+            settings: this._settings,
             installedVersion: extension.metadata['version-name'] ?? '',
             host: {
                 showTopBar: state => this._showTopBar(state),
@@ -85,7 +93,8 @@ class AgentUsageIndicator extends PanelMenu.Button {
     }
 
     // Left click opens the panel (PanelMenu.Button), middle click refreshes,
-    // right click opens the agent: the same as Omarchy's bar icon.
+    // right click opens the agent: the same as Omarchy's bar icon. With that
+    // switched off, right click opens the panel too.
     vfunc_event(event) {
         if (event.type() === Clutter.EventType.BUTTON_PRESS) {
             const button = event.get_button();
@@ -94,12 +103,16 @@ class AgentUsageIndicator extends PanelMenu.Button {
                 return Clutter.EVENT_STOP;
             }
             if (button === Clutter.BUTTON_SECONDARY) {
-                this.menu.close();
-                this._controller.launchAgent();
+                if (this._settings.get_boolean('right-click-opens-agent')) {
+                    this.menu.close();
+                    this._controller.launchAgent();
+                } else {
+                    this.menu.toggle();
+                }
                 return Clutter.EVENT_STOP;
             }
         }
-        return super.vfunc_event(event);
+        return OPENS_IN_VFUNC_EVENT ? super.vfunc_event(event) : Clutter.EVENT_PROPAGATE;
     }
 
     _onMenuKey(event) {

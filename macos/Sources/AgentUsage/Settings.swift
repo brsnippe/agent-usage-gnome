@@ -107,6 +107,7 @@ struct SettingsView: View {
     @AppStorage(Settings.agentCommand) private var agentCommand = ""
     @AppStorage(Settings.terminal) private var terminal = "auto"
     @AppStorage(Settings.terminalCommand) private var terminalCommand = ""
+    @AppStorage(Settings.rightClickOpensAgent) private var rightClickOpensAgent = true
     @AppStorage(Settings.checkUpdates) private var checkUpdates = true
 
     var body: some View {
@@ -149,6 +150,7 @@ struct SettingsView: View {
             }
 
             Section {
+                Toggle("Right-click opens the agent", isOn: $rightClickOpensAgent)
                 Picker("Agent", selection: $agent) {
                     ForEach(Terminals.agentChoices(on: machine), id: \.id) { Text($0.label).tag($0.id) }
                 }
@@ -177,7 +179,7 @@ struct SettingsView: View {
             } header: {
                 Text("Open agent")
             } footer: {
-                note("What the panel's open button, and right-clicking the menu bar icon, opens: an agent in a terminal, or a desktop app. Signing in and updating use the terminal too. In a custom terminal command, {command} is where the agent goes; without it, the agent goes at the end.")
+                note("What the panel's open button, and right-clicking the menu bar icon, opens: an agent in a terminal, or a desktop app. With right-click switched off, right-click and Control-click open the panel, as left-click does. Signing in and updating use the terminal too. In a custom terminal command, {command} is where the agent goes; without it, the agent goes at the end.")
             }
 
             Section {
@@ -216,7 +218,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 580, height: 760)
+        .frame(width: 580, height: 800)
     }
 
     private func note(_ text: String) -> some View {

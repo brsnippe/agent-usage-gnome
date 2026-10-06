@@ -127,11 +127,12 @@ class AgentUsageApplet extends Applet.TextIconApplet {
         this._controller.refresh();
     }
 
-    // Right click opens the agent, as on GNOME and macOS. In panel edit mode
-    // it shows Cinnamon's own applet menu, so the applet can still be moved,
-    // configured or removed.
+    // Right click opens the agent, as on GNOME and macOS. In panel edit mode,
+    // or with that switched off, it shows Cinnamon's own applet menu, so the
+    // applet can still be moved, configured or removed.
     _onButtonPressEvent(actor, event) {
-        if (event.get_button() === 3 && this._applet_enabled && !global.settings.get_boolean('panel-edit-mode')) {
+        if (event.get_button() === 3 && this._applet_enabled && !global.settings.get_boolean('panel-edit-mode') &&
+            this._settings.getValue('right-click-opens-agent')) {
             this.menu.close();
             this._controller.launchAgent();
             return Clutter.EVENT_STOP;

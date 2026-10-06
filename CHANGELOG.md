@@ -3,6 +3,28 @@
 Versions are git tags (`v0.6.0`, …). `agent-usage update` installs the newest
 one.
 
+## 0.14.0
+
+Right-click opening your agent can be switched off. On GNOME, Linux Mint and
+a Mac. And on GNOME 50, right- and middle-click work again.
+
+- **Right-click opens the agent:** a new switch under *Open agent* in the
+  settings, on by default. Switched off, right-click does what the desktop
+  does by itself. See the README's *Opening your agent* section.
+  - **GNOME and Mac:** right-click opens the panel, as left-click does. On a
+    Mac, Control-click too.
+  - **Linux Mint:** right-click shows Cinnamon's own applet menu (*About*,
+    *Configure…*, *Remove*).
+  - The panel's open button opens the agent either way.
+- **GNOME 50 (Ubuntu 26.04):** right-click opened the panel instead of your
+  agent, and middle-click opened it instead of refreshing. GNOME 50 opens
+  top-bar menus with any mouse button; now only the left one does that.
+  This also stops a stream of "Virtual function not implemented" errors in
+  GNOME's log.
+- **Tests:** GNOME's smoke test clicks through a virtual pointer, as a mouse
+  does, which is how the GNOME 50 problem came to light. Both smoke tests
+  right-click with the new switch off.
+
 ## 0.13.0
 
 ⏻ in the panel switches it off. On GNOME, Linux Mint and a Mac.

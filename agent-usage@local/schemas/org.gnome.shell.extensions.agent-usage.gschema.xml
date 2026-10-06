@@ -70,5 +70,10 @@
       <summary>Command for a custom terminal</summary>
       <description>Used when terminal is "custom". {command} is replaced by the agent's command; without it, the agent goes at the end. Example: "ghostty --window-decoration=false -e {command}".</description>
     </key>
+    <key name="right-click-opens-agent" type="b">
+      <default>true</default>
+      <summary>Right-clicking the top-bar icon opens the agent</summary>
+      <description>Off: right-click does what the desktop does by itself. On GNOME that opens the panel, as left-click does. The panel's open button works either way.</description>
+    </key>
   </schema>
 </schemalist>

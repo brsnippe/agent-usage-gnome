@@ -3,8 +3,9 @@
 #
 # The GNOME extension in a real GNOME Shell, headless: it has to install, load
 # without errors, stay out of the top bar until there's usage, show the
-# session limit, draw its panel, open the agent on a right click, and switch
-# itself off with the panel's ⏻ until it's switched back on. Meant for
+# session limit, draw its panel, take real clicks (right opens the agent, or
+# the panel with that switched off; middle refreshes), and switch itself off
+# with the panel's ⏻ until it's switched back on. Meant for
 # Ubuntu's Docker images, as a normal user with a system bus and logind
 # (test/gnome/prepare-ubuntu.sh sets that up). Screenshots and logs go to the
 # snapshot folder, test/gnome/snapshots by default.
@@ -107,6 +108,28 @@ button() {
       };
       return find($INDICATOR._controller.actor);
     })()"
+}
+
+# A click on the robot through a virtual pointer, so it goes where a mouse's
+# goes, GNOME 50's click gesture included. 1 is left, 2 middle, 3 right.
+click() {
+  shell "(globalThis.agentUsagePointer ??= imports.gi.Clutter.get_default_backend().get_default_seat()
+    .create_virtual_device(imports.gi.Clutter.InputDeviceType.POINTER_DEVICE), 'ready')" >/dev/null
+  # A new pointer misses its first moves, so move until the robot feels it.
+  for _ in $(seq 20); do
+    shell "(() => {
+        const [x, y] = $INDICATOR.get_transformed_position();
+        const [w, h] = $INDICATOR.get_transformed_size();
+        agentUsagePointer.notify_absolute_motion(imports.gi.GLib.get_monotonic_time(), x + w / 2, y + h / 2);
+      })()" >/dev/null
+    sleep 0.25
+    [[ $(shell "$INDICATOR.hover") == true ]] && break
+  done
+  for state in PRESSED RELEASED; do
+    shell "agentUsagePointer.notify_button(imports.gi.GLib.get_monotonic_time(), $1, imports.gi.Clutter.ButtonState.$state)" >/dev/null
+    sleep 0.3
+  done
+  sleep 1
 }
 
 # A session file, as the agents' hooks write it.
@@ -237,13 +260,37 @@ shell "$INDICATOR.menu.close()" >/dev/null
 check "opening the panel clears the green" "$(shell "$INDICATOR._icon.has_style_class_name('agent-usage-ready')")" "false"
 rm -f "$SESSIONS/claude-smoke.json"
 
-# ---- a right click opens the agent
-shell "$INDICATOR.vfunc_event({type: () => imports.gi.Clutter.EventType.BUTTON_PRESS, get_button: () => imports.gi.Clutter.BUTTON_SECONDARY})" >/dev/null
+# ---- clicks: right opens the agent, middle refreshes, left opens the panel
+click 3
 for _ in $(seq 20); do
   [[ -f $OUT/opened ]] && break
   sleep 0.25
 done
-check "a right click opens the agent, in the terminal from the settings" "$([[ -f $OUT/opened ]] && echo opened)" "opened"
+check "a right click opens the agent, in the terminal from the settings, and not the panel" \
+  "$([[ -f $OUT/opened ]] && echo opened) $(shell "$INDICATOR.menu.isOpen")" "opened false"
+
+shell "(() => { const controller = $INDICATOR._controller; controller.refreshes = 0; controller.refresh = () => controller.refreshes++; })()" >/dev/null
+click 2
+check "a middle click refreshes, and not the panel" "$(shell "$INDICATOR._controller.refreshes + ' ' + $INDICATOR.menu.isOpen")" "1 false"
+shell "delete $INDICATOR._controller.refresh" >/dev/null
+
+click 1
+check "a left click opens the panel" "$(shell "$INDICATOR.menu.isOpen")" "true"
+shell "$INDICATOR.menu.close()" >/dev/null
+sleep 0.5
+
+# ---- with that switched off, a right click opens the panel instead
+rm -f "$OUT/opened"
+gsettings --schemadir "$EXT_DIR/schemas" set org.gnome.shell.extensions.agent-usage right-click-opens-agent false
+for _ in $(seq 20); do
+  [[ $(shell "$INDICATOR._settings.get_boolean('right-click-opens-agent')") == false ]] && break
+  sleep 0.25
+done
+click 3
+check "switched off, a right click opens the panel, not the agent" \
+  "$(shell "$INDICATOR.menu.isOpen") $([[ -f $OUT/opened ]] && echo opened || echo 'not opened')" "true not opened"
+shell "$INDICATOR.menu.close()" >/dev/null
+gsettings --schemadir "$EXT_DIR/schemas" reset org.gnome.shell.extensions.agent-usage right-click-opens-agent
 
 # ---- ⏻ asks, then switches the extension off until it's switched back on
 shell "$INDICATOR.menu.open()" >/dev/null

@@ -20,7 +20,7 @@
     "launch": {
       "type": "section",
       "title": "Open agent",
-      "keys": ["launch-note", "agent", "agent-command", "terminal", "terminal-command", "try-launch"]
+      "keys": ["launch-note", "right-click-opens-agent", "agent", "agent-command", "terminal", "terminal-command", "try-launch"]
     },
     "updates": {
       "type": "section",
@@ -71,6 +71,12 @@
   "launch-note": {
     "type": "label",
     "description": "What the panel's open button, and right-clicking the robot, opens: an agent in a terminal, or a desktop app."
+  },
+  "right-click-opens-agent": {
+    "type": "switch",
+    "default": true,
+    "description": "Right-click opens the agent",
+    "tooltip": "Off: right-click shows Cinnamon's own applet menu (About, Configure…, Remove)."
   },
   "agent": {
     "type": "combobox",

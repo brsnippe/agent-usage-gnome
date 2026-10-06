@@ -74,22 +74,18 @@ final class StatusController: NSObject, NSWindowDelegate {
     }
 
     /// Left click opens the panel, right click (or Control-click) opens the
-    /// agent, middle click refreshes: the same as Omarchy's bar icon.
+    /// agent, middle click refreshes: the same as Omarchy's bar icon. With
+    /// that switched off, right click opens the panel too.
     @objc private func clicked(_ sender: Any?) {
         let event = NSApp.currentEvent
-        switch event?.type {
-        case .rightMouseUp?:
+        let rightClick = event?.type == .rightMouseUp || event?.modifierFlags.contains(.control) == true
+        if event?.type == .otherMouseUp {
+            model.runUpdate(.force)
+        } else if rightClick && UserDefaults.standard.bool(forKey: Settings.rightClickOpensAgent) {
             close()
             model.launchAgent()
-        case .otherMouseUp?:
-            model.runUpdate(.force)
-        default:
-            if event?.modifierFlags.contains(.control) == true {
-                close()
-                model.launchAgent()
-            } else {
-                toggle()
-            }
+        } else {
+            toggle()
         }
     }
 

@@ -2,9 +2,10 @@
 # Run with: cinnamon/test/smoke-test.sh [snapshot folder]
 #
 # The applet in a real Cinnamon on a virtual screen: it has to install, load
-# without errors, show the session limit in the panel, draw its panel, survive
-# a reinstall, and take itself off the panel with its ⏻, keeping its settings
-# for when it's added back. Meant for Linux Mint's Docker images, as a normal
+# without errors, show the session limit in the panel, draw its panel, open
+# the agent on a right click (Cinnamon's own menu, with that switched off),
+# survive a reinstall, and take itself off the panel with its ⏻, keeping its
+# settings for when it's added back. Meant for Linux Mint's Docker images, as a normal
 # user with Cinnamon, Xvfb and a system bus running
 # (cinnamon/test/run-in-mint.sh sets that up). Screenshots and logs go to the
 # snapshot folder, cinnamon/snapshots by default.
@@ -169,21 +170,22 @@ chmod +x ~/.local/bin/opencode
 settings=$(ls "${XDG_CONFIG_HOME:-$HOME/.config}/cinnamon/spices/$UUID/"*.json 2>/dev/null | head -1)
 check "Cinnamon set up the applet's settings" "$([[ -f $settings ]] && echo yes)" "yes"
 # What the settings window does: write the file, then tell Cinnamon which
-# keys changed, naming the instance by the file's name.
-python3 - "$settings" <<'PY'
+# key changed, naming the instance by the file's name. The value is JSON.
+setting() {
+  python3 - "$settings" "$1" "$2" <<'PY'
 import json, sys
-path = sys.argv[1]
+path, key, value = sys.argv[1:]
 with open(path) as f:
     settings = json.load(f)
-settings["terminal"]["value"] = "custom"
-settings["terminal-command"]["value"] = "env AGENT_USAGE_TERMINAL=1 {command}"
+settings[key]["value"] = json.loads(value)
 with open(path, "w") as f:
     json.dump(settings, f)
 PY
-for key in terminal-command terminal; do
   gdbus call --session --dest org.Cinnamon --object-path /org/Cinnamon --method org.Cinnamon.updateSetting \
-    "$UUID" "$(basename "$settings" .json)" "$key" "$(jq -c --arg key "$key" '.[$key].value' "$settings")" >/dev/null
-done
+    "$UUID" "$(basename "$settings" .json)" "$1" "$2" >/dev/null
+}
+setting terminal-command '"env AGENT_USAGE_TERMINAL=1 {command}"'
+setting terminal '"custom"'
 for _ in $(seq 20); do
   [[ $(applet "._controller.launchSettings().terminal") == custom ]] && break
   sleep 0.5
@@ -266,6 +268,21 @@ for _ in $(seq 20); do
 done
 check "a right click opens the agent, in the terminal from the settings" "$([[ -f $OUT/opened ]] && echo opened)" "opened"
 check "and doesn't open the panel" "$(applet ".menu.isOpen")" "false"
+
+# ---- with that switched off, a right click shows Cinnamon's own menu
+rm -f "$OUT/opened"
+setting right-click-opens-agent false
+for _ in $(seq 20); do
+  [[ $(applet "._settings.getValue('right-click-opens-agent')") == false ]] && break
+  sleep 0.25
+done
+applet "._onButtonPressEvent(null, {get_button: () => 3})" >/dev/null
+sleep 1
+check "switched off, a right click shows Cinnamon's menu, not the agent" \
+  "$(applet "._applet_context_menu.isOpen") $([[ -f $OUT/opened ]] && echo opened || echo 'not opened')" "true not opened"
+shot_actor applet-menu "._applet_context_menu.actor"
+applet "._applet_context_menu.close()" >/dev/null
+setting right-click-opens-agent true
 
 # ---- the settings window, as Configure… or the ⚙ button opens it
 applet ".configureApplet()" >/dev/null

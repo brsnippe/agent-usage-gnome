@@ -85,12 +85,13 @@ It was built iteratively with an AI coding agent: Claude Opus 5.5, running in
 | [0024](0024-check-for-releases-hourly.md) | Check for releases every hour, and after waking | Accepted |
 | [0025](0025-session-limit-in-the-top-bar.md) | The top bar shows the session limit from 40% | Accepted |
 | [0026](0026-all-time-total.md) | The all-time token total in the All time heading | Accepted |
-| [0027](0027-cinnamon-applet-for-linux-mint.md) | A Cinnamon applet for Linux Mint | Accepted |
+| [0027](0027-cinnamon-applet-for-linux-mint.md) | A Cinnamon applet for Linux Mint | Accepted, extended by 0033 |
 | [0028](0028-shared-panel-code.md) | One panel for GNOME and Cinnamon | Accepted |
 | [0029](0029-installing-on-cinnamon.md) | Installing on Cinnamon, without logging out | Accepted |
-| [0030](0030-testing-in-real-shells.md) | Test the panels in real shells, in Docker | Accepted |
+| [0030](0030-testing-in-real-shells.md) | Test the panels in real shells, in Docker | Accepted, extended by 0033 |
 | [0031](0031-session-colors.md) | Session colors: the robot says when an agent wants you | Accepted |
 | [0032](0032-switching-it-off.md) | Switching it off: ⏻ in the panel | Accepted |
+| [0033](0033-right-click-setting.md) | Right-click opening the agent is a setting | Accepted |
 
 ## Open items
 
@@ -146,3 +147,6 @@ It was built iteratively with an AI coding agent: Claude Opus 5.5, running in
   signal; a real click, the notification on screen, and getting it back
   through the Extensions app or Mint's Applets list are still to be seen.
   The Mac's ⏻ has only been drawn, in the snapshots.
+- **The Mac's right-click switch has only been built in CI**
+  ([0033](0033-right-click-setting.md)): a real right-click and
+  Control-click with it off are still to be seen.
