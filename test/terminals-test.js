@@ -44,6 +44,26 @@ check('every listed terminal builds its own command line',
         '-e /usr/bin/opencode',
     ]);
 
+// The desktop's own default terminal (Cinnamon's Preferred Applications),
+// which Automatic tries first.
+const mint = machine('opencode', 'gnome-terminal', 'tilix', 'x-terminal-emulator');
+check("automatic uses the desktop's default terminal first",
+    launch({preferredTerminal: Terminals.preferredTerminal('tilix', '-e')}, mint),
+    {argv: ['/usr/bin/tilix', '-e', '/usr/bin/opencode'], agentName: 'OpenCode', terminalName: 'tilix'});
+check('a default terminal from the list starts its usual way, not with the desktop argument',
+    launch({preferredTerminal: Terminals.preferredTerminal('gnome-terminal', '-x')}, mint),
+    {argv: ['/usr/bin/gnome-terminal', '--', '/usr/bin/opencode'], agentName: 'OpenCode', terminalName: 'GNOME Terminal'});
+check('a default terminal with flags of its own keeps them',
+    launch({preferredTerminal: Terminals.preferredTerminal('kitty --single-instance', '')}, machine('opencode', 'kitty')).argv,
+    ['/usr/bin/kitty', '--single-instance', '/usr/bin/opencode']);
+check("a default terminal that isn't installed falls back to the usual list",
+    launch({preferredTerminal: Terminals.preferredTerminal('tilix', '-e')}).argv, ['/usr/bin/gnome-terminal', '--', '/usr/bin/opencode']);
+check('a terminal picked by name beats the default',
+    launch({terminal: 'ghostty', preferredTerminal: Terminals.preferredTerminal('tilix', '-e')}, machine('opencode', 'ghostty', 'tilix')).argv,
+    ['/usr/bin/ghostty', '-e', '/usr/bin/opencode']);
+check('no default terminal named', [Terminals.preferredTerminal(''), Terminals.preferredTerminal('  '), Terminals.preferredTerminal('"broken')],
+    [null, null, null]);
+
 check('a chosen terminal that is missing is an error, not a fallback', launch({terminal: 'kitty'}),
     {error: "Kitty isn't installed.", reason: 'terminal', agentName: 'OpenCode'});
 check('no terminal at all', launch({}, machine('opencode')).reason, 'terminal');

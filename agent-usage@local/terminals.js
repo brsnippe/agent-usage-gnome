@@ -56,6 +56,23 @@ function shellJoin(argv) {
     return argv.map(arg => GLib.shell_quote(arg)).join(' ');
 }
 
+// The desktop's own default terminal, which "Automatic" tries first where the
+// desktop has one (Cinnamon: System Settings → Preferred Applications). A
+// terminal from the list above starts its usual way; any other gets the
+// desktop's own "run this" argument, such as -e or -x. Returns null when the
+// desktop names none.
+export function preferredTerminal(exec, execArg = '') {
+    const {words} = parse(exec);
+    if (!words || words.length === 0)
+        return null;
+    const program = words[0];
+    const known = TERMINALS.find(terminal => terminal.program === GLib.path_get_basename(program));
+    if (known && words.length === 1)
+        return {name: known.name, program, args: known.args};
+    const extra = parse(execArg).words ?? [];
+    return {name: GLib.path_get_basename(program), program, args: command => [...words.slice(1), ...extra, ...command]};
+}
+
 // GNOME Shell's PATH often lacks the per-user folders CLIs install into.
 export function searchDirs() {
     const home = GLib.get_home_dir();
@@ -213,7 +230,8 @@ export function terminalArgv(prefs, command, find = findProgram) {
     }
 
     const chosen = TERMINALS.find(terminal => terminal.id === prefs.terminal);
-    for (const terminal of chosen ? [chosen] : AUTOMATIC) {
+    const automatic = prefs.preferredTerminal ? [prefs.preferredTerminal, ...AUTOMATIC] : AUTOMATIC;
+    for (const terminal of chosen ? [chosen] : automatic) {
         const program = find(terminal.program);
         if (program)
             return {argv: [program, ...terminal.args(command)], terminalName: terminal.name};
