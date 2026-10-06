@@ -24,6 +24,16 @@
       <summary>Color the robot by what the agent sessions want</summary>
       <description>Orange while a Claude Code or OpenCode session waits for you (a permission, a question), green once one has finished its turn, until you open the panel. Needs hooks in Claude Code and a plugin in OpenCode, which follow this setting: switching it off removes them.</description>
     </key>
+    <key name="session-pop" type="b">
+      <default>true</default>
+      <summary>Pop the robot when a session wants you</summary>
+      <description>The robot grows and springs back once when a session starts waiting for you or finishes its turn. Only with session colors on.</description>
+    </key>
+    <key name="session-sounds" type="b">
+      <default>false</default>
+      <summary>Play a sound when a session wants you</summary>
+      <description>A double blip when a session starts waiting for you, a rising chime when one finishes its turn. Played as an alert sound, at the system sounds' volume. Only with session colors on.</description>
+    </key>
     <key name="check-updates" type="b">
       <default>true</default>
       <summary>Check for new releases</summary>

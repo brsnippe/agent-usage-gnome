@@ -36,7 +36,7 @@ fi
 echo "enabled-extensions: $(gsettings get org.gnome.shell enabled-extensions)"
 # The panel's ⏻ puts it here; the Extensions app takes it out again.
 echo "disabled-extensions: $(gsettings get org.gnome.shell disabled-extensions)"
-for key in limits-interval scan-interval session-threshold session-colors agent agent-command terminal terminal-command; do
+for key in limits-interval scan-interval session-threshold session-colors session-pop session-sounds agent agent-command terminal terminal-command; do
   echo "$key: $(gsettings --schemadir "$EXT_DIR/schemas" get org.gnome.shell.extensions.agent-usage "$key" 2>&1)"
 done
 

@@ -1,6 +1,7 @@
 import AgentUsageCore
 import AppKit
 import Combine
+import QuartzCore
 import SwiftUI
 
 /// The menu bar item and the panel under it.
@@ -14,6 +15,9 @@ final class StatusController: NSObject, NSWindowDelegate {
     private var changes: AnyCancellable?
     private var resizeScheduled = false
     private var closedAt = Date.distantPast
+    /// The robot's pop, while it runs, and the robot it stands in for.
+    private var popLayer: CALayer?
+    private var popRobot: NSImage?
 
     init(model: AppModel) {
         self.model = model
@@ -36,6 +40,7 @@ final class StatusController: NSObject, NSWindowDelegate {
         }
         model.onRecordsChange = { [weak self] in self?.updateMenuBar() }
         model.onNotice = { [weak self] in self?.open() }
+        model.onSessionAlert = { [weak self] in self?.alert($0) }
         changes = model.panel.objectWillChange.sink { [weak self] _ in self?.scheduleResize() }
         updateMenuBar()
     }
@@ -54,7 +59,12 @@ final class StatusController: NSObject, NSWindowDelegate {
         }
         let providers = model.providers
         let alarming = Panel.menuBarAlarming(providers)
-        button.image = Assets.robot(model.session.map(Theme.sessionNS) ?? (alarming ? Theme.urgentNS : nil))
+        let robot = Assets.robot(model.session.map(Theme.sessionNS) ?? (alarming ? Theme.urgentNS : nil))
+        // A pop in one colour ends when the robot changes to another.
+        if popLayer != nil, robot !== popRobot {
+            stopPop()
+        }
+        button.image = popLayer == nil ? robot : Assets.blankRobot
         // What the colour says, for VoiceOver.
         switch model.session {
         case .waiting?: button.setAccessibilityValue("A session waits for you")
@@ -76,6 +86,69 @@ final class StatusController: NSObject, NSWindowDelegate {
             .font: NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular),
             .foregroundColor: color,
         ])
+    }
+
+    /// A session started waiting for you, or finished its turn.
+    private func alert(_ alert: TopBarSession) {
+        let defaults = UserDefaults.standard
+        if defaults.bool(forKey: Settings.sessionPop) {
+            pop()
+        }
+        if defaults.bool(forKey: Settings.sessionSounds) {
+            Sounds.play(alert)
+        }
+    }
+
+    /// The robot grows and springs back, once: a layer of its own over the
+    /// robot, which stands in for the button's image while it runs. Scaling
+    /// the button itself would scale the percentage too, and AppKit manages
+    /// the button layer's anchor and transform. The menu bar cuts off what
+    /// leaves the item, so it only grows to 1.2×. Not with Reduce motion on.
+    private func pop() {
+        guard popLayer == nil, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+              let button = item.button, let robot = button.image, !robot.isTemplate, let cell = button.cell else {
+            return
+        }
+        button.wantsLayer = true
+        guard let host = button.layer else {
+            return
+        }
+        let scale = button.window?.backingScaleFactor ?? 2
+        let layer = CALayer()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        // Also when a change of colour ended it early, so only this pop's.
+        CATransaction.setCompletionBlock { [weak self, weak layer] in
+            guard let self, let layer, self.popLayer === layer else {
+                return
+            }
+            self.stopPop()
+            self.updateMenuBar()
+        }
+        layer.frame = cell.imageRect(forBounds: button.bounds)
+        layer.contentsScale = scale
+        layer.contentsGravity = .resizeAspect
+        layer.contents = robot.layerContents(forContentsScale: scale)
+        host.addSublayer(layer)
+        popLayer = layer
+        popRobot = robot
+        button.image = Assets.blankRobot
+
+        let animation = CAKeyframeAnimation(keyPath: "transform.scale")
+        animation.values = [1.0, 1.2, 0.95, 1.0]
+        animation.keyTimes = [0, 0.27, 0.65, 1]
+        animation.timingFunctions = [
+            CAMediaTimingFunction(name: .easeOut), CAMediaTimingFunction(name: .easeInEaseOut), CAMediaTimingFunction(name: .easeInEaseOut),
+        ]
+        animation.duration = 0.45
+        layer.add(animation, forKey: "pop")
+        CATransaction.commit()
+    }
+
+    private func stopPop() {
+        popLayer?.removeFromSuperlayer()
+        popLayer = nil
+        popRobot = nil
     }
 
     /// Left click opens the panel, right click (or Control-click) opens the

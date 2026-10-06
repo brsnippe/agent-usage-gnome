@@ -15,7 +15,7 @@
     "panel": {
       "type": "section",
       "title": "Panel",
-      "keys": ["session-threshold", "session-colors"]
+      "keys": ["session-threshold", "session-colors", "session-pop", "session-sounds", "play-waiting", "play-ready"]
     },
     "launch": {
       "type": "section",
@@ -67,6 +67,32 @@
     "default": true,
     "description": "Session colors",
     "tooltip": "The robot turns orange while a Claude Code or OpenCode session waits for you, and green once one has finished, until you open the panel. Works through hooks in Claude Code and a plugin in OpenCode 2; switching this off removes them."
+  },
+  "session-pop": {
+    "type": "switch",
+    "default": true,
+    "description": "Pop the robot",
+    "tooltip": "It grows and springs back once when a session starts waiting for you or finishes its turn.",
+    "dependency": "session-colors"
+  },
+  "session-sounds": {
+    "type": "switch",
+    "default": false,
+    "description": "Sounds",
+    "tooltip": "A double blip when a session waits for you, a rising chime when one has finished. At the volume of the system sounds.",
+    "dependency": "session-colors"
+  },
+  "play-waiting": {
+    "type": "button",
+    "description": "Play: input needed",
+    "callback": "playWaiting",
+    "tooltip": "The double blip, as the robot plays it, also with Sounds switched off."
+  },
+  "play-ready": {
+    "type": "button",
+    "description": "Play: session ready",
+    "callback": "playReady",
+    "tooltip": "The rising chime, as the robot plays it, also with Sounds switched off."
   },
   "launch-note": {
     "type": "label",

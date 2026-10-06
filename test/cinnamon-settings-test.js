@@ -30,7 +30,7 @@ const gnomeKeys = [...gschema.matchAll(/<key name="([^"]+)" type="(.)">([\s\S]*?
     return {name, type, value, range: range ? [Number(range[1]), Number(range[2])] : null};
 });
 check("GNOME's schema has the keys this test expects", gnomeKeys.map(key => key.name),
-    ['limits-interval', 'scan-interval', 'session-threshold', 'session-colors', 'check-updates', 'agent', 'agent-command', 'terminal', 'terminal-command', 'right-click-opens-agent']);
+    ['limits-interval', 'scan-interval', 'session-threshold', 'session-colors', 'session-pop', 'session-sounds', 'check-updates', 'agent', 'agent-command', 'terminal', 'terminal-command', 'right-click-opens-agent']);
 
 const cinnamonType = {i: 'spinbutton', b: 'switch'};
 for (const key of gnomeKeys) {
@@ -54,6 +54,8 @@ check('every setting is shown once', [...shown].sort(), [...defined].sort());
 
 check('custom commands only show with Custom…', [schema['agent-command'].dependency, schema['terminal-command'].dependency],
     ['agent=custom', 'terminal=custom']);
+check('the pop and the sounds only switch with session colors on', [schema['session-pop'].dependency, schema['session-sounds'].dependency],
+    ['session-colors', 'session-colors']);
 const buttons = defined.filter(key => schema[key].type === 'button').map(key => schema[key].callback);
 check("the buttons call the applet's methods", buttons.map(callback => new RegExp(`^    ${callback}\\(\\) \\{$`, 'm').test(applet)),
     buttons.map(() => true));

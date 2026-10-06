@@ -20,7 +20,7 @@ jobs:
 
       - name: Python compiles
         run: |
-          for f in agent-usage@local/bin/agent-usage-claude agent-usage@local/bin/agent-usage-codex agent-usage@local/hooks/agent-usage-session cinnamon/*.py test/fake-collector test/gnome/*.py; do
+          for f in agent-usage@local/bin/agent-usage-claude agent-usage@local/bin/agent-usage-codex agent-usage@local/hooks/agent-usage-session cinnamon/*.py scripts/*.py test/fake-collector test/gnome/*.py; do
             python3 -c 'import ast, sys; ast.parse(open(sys.argv[1]).read(), sys.argv[1])' "$f"
           done
 
@@ -54,6 +54,9 @@ jobs:
 
       - name: The OpenCode plugin
         run: node test/opencode-plugin-test.mjs
+
+      - name: The robot's sounds
+        run: python3 test/sounds-test.py
 
       - name: Install, update and uninstall from git
         run: test/cli-test.sh
@@ -143,16 +146,22 @@ jobs:
       # and its bundled collectors, and their records have to land. A session
       # waits for input meanwhile, so the screenshot of the real menu bar
       # shows the robot orange (when the runner allows screenshots at all).
+      # Then the session finishes its turn: the robot pops and sounds.
       - name: The app starts and collects
         timeout-minutes: 3
         run: |
           usage=~/.local/state/omarchy/agents/usage
           sessions=~/.local/state/omarchy/agents/sessions
           mkdir -p "$sessions" macos/snapshots
+          defaults write io.github.brsnippe.agent-usage sessionSounds -bool true
           sleep 600 &
           waiting=$!
-          now=$(($(date +%s) * 1000))
-          printf '{"agent":"claude","session":"ci","state":"waiting","since":%s,"updated":%s,"pid":%s}\n' "$now" "$now" "$waiting" >"$sessions/claude-ci.json"
+          session() {
+            local now=$(($(date +%s) * 1000))
+            printf '{"agent":"claude","session":"ci","state":"%s","since":%s,"updated":%s,"pid":%s}\n' "$1" "$now" "$now" "$waiting" >"$sessions/.claude-ci.tmp"
+            mv "$sessions/.claude-ci.tmp" "$sessions/claude-ci.json"
+          }
+          session waiting
           "macos/build/Agent Usage.app/Contents/MacOS/AgentUsage" &
           pid=$!
           for _ in $(seq 90); do
@@ -160,9 +169,13 @@ jobs:
             sleep 1
           done
           screencapture -x macos/snapshots/menubar-real.png || echo "no screenshot"
+          session ready
+          sleep 2
           kill -0 $pid
           kill $pid "$waiting"
+          defaults delete io.github.brsnippe.agent-usage sessionSounds
           cat ~/Library/Logs/AgentUsage/agent-usage.log
+          grep -q "session alert: ready" ~/Library/Logs/AgentUsage/agent-usage.log
           for agent in claude codex; do
             /usr/bin/python3 -c 'import json, sys; r = json.load(open(sys.argv[1])); print(r["id"], "|", r["usageStatusText"])' "$usage/$agent.json"
           done

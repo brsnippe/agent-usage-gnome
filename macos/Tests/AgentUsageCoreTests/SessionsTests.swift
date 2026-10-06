@@ -54,6 +54,83 @@ final class SessionsTests: XCTestCase {
         XCTAssertEqual(["1790000000000\n", "", "garbage", "-5", nil].map(Sessions.parseSeen), [1_790_000_000_000, 0, 0, 0, 0])
     }
 
+    // ---- the pop and the sound
+
+    struct Look {
+        var records: [JSONValue]
+        var seen: Double = 0
+        /// Minutes after `now`.
+        var at: Double = 0
+    }
+
+    /// Looks one after another, as the panel does, and says what each alerts.
+    func alerts(_ looks: Look...) -> [TopBarSession?] {
+        var marks: [String: String]?
+        var lastAlert: Double = 0
+        return looks.map { look in
+            let at = now + look.at * minute
+            let result = Sessions.alert(look.records, now: at, seen: look.seen, alive: { self.running.contains($0) }, marks: marks, lastAlert: lastAlert)
+            marks = result.marks
+            if result.alert != nil {
+                lastAlert = at
+            }
+            return result.alert
+        }
+    }
+
+    func later(_ state: String, _ minutes: Double, _ extra: [String: JSONValue] = [:]) -> JSONValue {
+        session(state, ["session": "s", "since": .number(now + minutes * minute), "updated": .number(now + minutes * minute)].merging(extra) { _, new in new })
+    }
+
+    func testAlerts() {
+        XCTAssertEqual(alerts(Look(records: [session("waiting"), session("ready")])), [nil], "the first look is quiet, whatever is there")
+        XCTAssertEqual(alerts(Look(records: [later("working", 0)]), Look(records: [later("waiting", 1)], at: 1)), [nil, .waiting],
+                       "a session starting to wait alerts")
+        XCTAssertEqual(alerts(Look(records: [later("working", 0)]), Look(records: [later("ready", 1)], at: 1)), [nil, .ready],
+                       "a session finishing its turn alerts")
+        XCTAssertEqual(alerts(Look(records: []), Look(records: [later("waiting", 1)], at: 1)), [nil, .waiting],
+                       "a new session that already waits alerts")
+        XCTAssertEqual(alerts(Look(records: []), Look(records: [later("waiting", 1)], at: 1),
+                              Look(records: [later("waiting", 1, ["updated": .number(now + 2 * minute)])], at: 2)),
+                       [nil, .waiting, nil], "the same wait alerts once")
+        XCTAssertEqual(alerts(Look(records: []), Look(records: [later("waiting", 1)], at: 1), Look(records: [later("working", 2)], at: 2),
+                              Look(records: [later("waiting", 3)], at: 3)),
+                       [nil, .waiting, nil, .waiting], "waiting again after working alerts again")
+        let other: [String: JSONValue] = ["session": "t", "pid": 200]
+        XCTAssertEqual(alerts(Look(records: [later("working", 0), later("working", 0, other)]),
+                              Look(records: [later("ready", 1), later("working", 0, other)], at: 1),
+                              Look(records: [later("ready", 1), later("ready", 2, other)], at: 2)),
+                       [nil, .ready, .ready], "a second session finishing alerts while the robot is already green")
+    }
+
+    func testQuietAlerts() {
+        XCTAssertEqual(alerts(Look(records: [later("working", 0)]), Look(records: [later("ready", 1)], seen: now + 2 * minute, at: 2)), [nil, nil],
+                       "a turn already seen is quiet")
+        XCTAssertEqual(alerts(Look(records: [later("ready", 0)]), Look(records: [later("ready", 0)], seen: now + minute, at: 1)), [nil, nil],
+                       "opening the panel alerts nothing")
+        XCTAssertEqual(alerts(Look(records: []), Look(records: [later("ready", 1, ["parent": "root"])], at: 1)), [nil, nil],
+                       "a subagent finishing is quiet")
+        XCTAssertEqual(alerts(Look(records: []), Look(records: [later("waiting", 1, ["parent": "root"])], at: 1)), [nil, .waiting],
+                       "a subagent waiting for you alerts")
+        XCTAssertEqual(alerts(Look(records: []), Look(records: [later("ready", 1), later("waiting", 1, ["session": "t", "pid": 200])], at: 1)),
+                       [nil, .waiting], "waiting beats ready")
+        XCTAssertEqual(alerts(Look(records: []), Look(records: [later("waiting", 1, ["pid": 300])], at: 1)), [nil, nil],
+                       "a session whose agent is gone is quiet")
+    }
+
+    func testMergedAlerts() {
+        let other: [String: JSONValue] = ["session": "t", "pid": 200]
+        XCTAssertEqual(alerts(Look(records: []), Look(records: [later("ready", 1)], at: 1),
+                              Look(records: [later("ready", 1), later("waiting", 1.02, other)], at: 1.02)),
+                       [nil, .ready, nil], "alerts within 3 seconds merge into one")
+        XCTAssertEqual(alerts(Look(records: []), Look(records: [later("ready", 1)], at: 1),
+                              Look(records: [later("ready", 1), later("waiting", 1.1, other)], at: 1.1)),
+                       [nil, .ready, .waiting], "and after that they alert again")
+        let marks = Sessions.alert([later("waiting", 1), later("idle", 0, ["pid": 300])], now: now, seen: 0, alive: { self.running.contains($0) },
+                                   marks: nil, lastAlert: 0).marks
+        XCTAssertEqual(marks, ["claude/s": "waiting@\(now + minute)"], "the marks are each live session, with its state and since")
+    }
+
     func testFiles() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("sessions-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

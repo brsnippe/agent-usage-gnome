@@ -1,7 +1,8 @@
 #!/bin/bash
 # Build "Agent Usage.app" into macos/build/: one binary for Apple silicon and
-# Intel, the icons and fonts from Resources/, and the collectors and session
-# hooks from agent-usage@local (the same files the GNOME extension uses).
+# Intel, the icons and fonts from Resources/, and the collectors, session
+# hooks and sounds from agent-usage@local (the same files the GNOME extension
+# uses).
 # Signed ad hoc, which Apple silicon requires and needs no Apple account.
 #
 #   macos/build-app.sh            # build/Agent Usage.app
@@ -32,7 +33,7 @@ swift build "${flags[@]}"
 bin=$(swift build "${flags[@]}" --show-bin-path)
 
 rm -rf "$app"
-mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources/bin" "$app/Contents/Resources/hooks" "$app/Contents/Resources/Fonts"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources/bin" "$app/Contents/Resources/hooks" "$app/Contents/Resources/Fonts" "$app/Contents/Resources/Sounds"
 cp "$bin/AgentUsage" "$app/Contents/MacOS/AgentUsage"
 sed -e "s/@VERSION@/$version/g" -e "s/@VERSION_LABEL@/$label/g" -e "s#@REPOSITORY@#$repository#g" Resources/Info.plist >"$app/Contents/Info.plist"
 cp Resources/Icons/*.pdf "$app/Contents/Resources/"
@@ -42,6 +43,7 @@ chmod 755 "$app/Contents/Resources/bin/"*
 # The session colors' hooks, outside bin/: everything there is a collector.
 cp ../agent-usage@local/hooks/agent-usage-session ../agent-usage@local/hooks/opencode-agent-usage.js "$app/Contents/Resources/hooks/"
 chmod 755 "$app/Contents/Resources/hooks/agent-usage-session"
+cp ../agent-usage@local/sounds/*.wav "$app/Contents/Resources/Sounds/"
 
 codesign --force --sign - --timestamp=none "$app"
 codesign --verify --strict "$app"

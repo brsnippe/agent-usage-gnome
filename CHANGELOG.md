@@ -3,6 +3,29 @@
 Versions are git tags (`v0.6.0`, …). `agent-usage update` installs the newest
 one.
 
+## 0.15.0
+
+The robot pops, and can sound, when a session wants you. On GNOME, Linux
+Mint and a Mac.
+
+- **Pop the robot:** it grows and springs back once when a Claude Code or
+  OpenCode session starts waiting for you, or finishes its turn. On by
+  default.
+- **Sounds:** a double blip when a session waits for you, a rising chime
+  when one has finished. Off by default. On GNOME and Mint they're alert
+  sounds, at the *System Sounds* volume.
+- **Both are switches** under *Session colors* in the settings, and need
+  session colors on. See the README's *The pop and the sounds* section.
+- **Play buttons** under them, *Input needed* and *Session ready*, play each
+  sound as the robot would, so you can hear them before switching them on.
+- **Every session counts:** a second session finishing pops and sounds too,
+  also when the robot is already green. Alerts within 3 seconds count as
+  one, and nothing sounds for what was going on before the panel started.
+- **Tests:** the smoke tests in GNOME and Cinnamon follow the robot's size
+  through the pop, with animations off and on, record the sounds, and press
+  the play buttons the way the settings windows do. The Mac's CI has a
+  session finish while the app runs.
+
 ## 0.14.1
 
 On a Mac, the robot shows its colors.

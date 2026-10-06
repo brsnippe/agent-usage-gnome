@@ -89,9 +89,10 @@ It was built iteratively with an AI coding agent: Claude Opus 5.5, running in
 | [0028](0028-shared-panel-code.md) | One panel for GNOME and Cinnamon | Accepted |
 | [0029](0029-installing-on-cinnamon.md) | Installing on Cinnamon, without logging out | Accepted |
 | [0030](0030-testing-in-real-shells.md) | Test the panels in real shells, in Docker | Accepted, extended by 0033 |
-| [0031](0031-session-colors.md) | Session colors: the robot says when an agent wants you | Accepted |
+| [0031](0031-session-colors.md) | Session colors: the robot says when an agent wants you | Accepted, extended by 0034 |
 | [0032](0032-switching-it-off.md) | Switching it off: ⏻ in the panel | Accepted |
 | [0033](0033-right-click-setting.md) | Right-click opening the agent is a setting | Accepted |
+| [0034](0034-pop-and-sounds.md) | The robot pops and sounds when a session wants you | Accepted |
 
 ## Open items
 
@@ -150,3 +151,8 @@ It was built iteratively with an AI coding agent: Claude Opus 5.5, running in
 - **The Mac's right-click switch has only been built in CI**
   ([0033](0033-right-click-setting.md)): a real right-click and
   Control-click with it off are still to be seen.
+- **The pop and the sounds haven't run on a coworker's machine yet**
+  ([0034](0034-pop-and-sounds.md)). What the trial has to confirm:
+  - both sounds at a real volume, through a desktop's sound settings;
+  - the pop on a real panel, at the panel's own height;
+  - the Mac's pop, which only CI has run, inside a real menu bar.

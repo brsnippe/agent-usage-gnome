@@ -30,6 +30,7 @@ python3 test/claude-keychain-test.py >/dev/null || die "test/claude-keychain-tes
 python3 test/codex-sign-in-test.py >/dev/null || die "test/codex-sign-in-test.py failed."
 python3 test/session-hooks-test.py >/dev/null || die "test/session-hooks-test.py failed."
 node test/opencode-plugin-test.mjs >/dev/null || die "test/opencode-plugin-test.mjs failed."
+python3 test/sounds-test.py >/dev/null || die "test/sounds-test.py failed."
 test/cli-test.sh >/dev/null || die "test/cli-test.sh failed."
 
 echo "$version" >VERSION

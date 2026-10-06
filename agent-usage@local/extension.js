@@ -16,11 +16,23 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as Util from 'resource:///org/gnome/shell/misc/util.js';
 
-import {PanelController} from './panel.js';
+import {PanelController, popActor} from './panel.js';
 
 // GNOME 46 to 49 open a top-bar menu in PanelMenu.Button's vfunc_event; 50
 // with a click gesture instead, and has no vfunc_event to hand events on to.
 const OPENS_IN_VFUNC_EVENT = Object.hasOwn(PanelMenu.Button.prototype, 'vfunc_event');
+
+// The settings window runs in a process of its own; its play buttons ask GNOME
+// Shell (org.gnome.Shell on the session bus) to play a sound here, exactly as
+// an alert would. prefs.js has the same path and name.
+const SOUNDS_PATH = '/io/github/brsnippe/AgentUsage';
+const SOUNDS_INTERFACE = `<node>
+  <interface name="io.github.brsnippe.AgentUsage">
+    <method name="PlaySound">
+      <arg type="s" direction="in" name="sound"/>
+    </method>
+  </interface>
+</node>`;
 
 function setStyleClass(actor, name, on) {
     if (on)
@@ -54,6 +66,8 @@ class AgentUsageIndicator extends PanelMenu.Button {
             installedVersion: extension.metadata['version-name'] ?? '',
             host: {
                 showTopBar: state => this._showTopBar(state),
+                // GNOME's own setting for animations makes it instant.
+                pop: () => popActor(this._icon),
                 closeMenu: () => this.menu.close(),
                 isMenuOpen: () => this.menu.isOpen,
                 keepFocus: () => this._keepFocus(),
@@ -88,7 +102,24 @@ class AgentUsageIndicator extends PanelMenu.Button {
         // ←/→ to the neighbouring top-bar menu.
         this.menu.actor.connect('captured-event', (_actor, event) => this._onMenuKey(event));
 
-        this.connect('destroy', () => this._controller.destroy());
+        // An error for an unknown sound goes back to the caller, rather than
+        // into GNOME Shell's log.
+        this._sounds = Gio.DBusExportedObject.wrapJSObject(SOUNDS_INTERFACE, {
+            PlaySoundAsync: ([sound], invocation) => {
+                try {
+                    this._controller.playSound(sound);
+                    invocation.return_value(null);
+                } catch (e) {
+                    invocation.return_dbus_error('io.github.brsnippe.AgentUsage.Error.NoSuchSound', e.message);
+                }
+            },
+        });
+        this._sounds.export(Gio.DBus.session, SOUNDS_PATH);
+
+        this.connect('destroy', () => {
+            this._sounds.unexport();
+            this._controller.destroy();
+        });
         this._controller.start();
     }
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Assemble the Cinnamon applet in DEST: its own files from
-# cinnamon/agent-usage@local, the collectors, session hooks, icons and
-# stylesheet it shares with the GNOME extension, and the shared modules
+# cinnamon/agent-usage@local, the collectors, session hooks, icons, sounds
+# and stylesheet it shares with the GNOME extension, and the shared modules
 # rewritten for Cinnamon's module system.
 #
 #   cinnamon/build-applet.sh DEST [VERSION]
@@ -23,7 +23,7 @@ version="${2:-}"
 rm -rf "$dest"
 mkdir -p "$dest/bin"
 cp "$OWN/applet.js" "$OWN/icon.png" "$dest/"
-cp -r "$SHARED/icons" "$SHARED/hooks" "$dest/"
+cp -r "$SHARED/icons" "$SHARED/hooks" "$SHARED/sounds" "$dest/"
 cp "$SHARED"/bin/agent-usage-* "$dest/bin/"
 chmod +x "$dest"/bin/* "$dest/hooks/agent-usage-session"
 cat "$SHARED/stylesheet.css" "$OWN/stylesheet.css" >"$dest/stylesheet.css"

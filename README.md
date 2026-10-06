@@ -12,8 +12,8 @@ icon: see [macOS](#macos).
   90% or more. It stays hidden until an agent has usage to show. See
   [Which limit the top bar shows](#which-limit-the-top-bar-shows).
 - **Session colors:** the robot turns orange while a Claude Code or OpenCode
-  session waits for you, and green once one has finished its turn. See
-  [Session colors](#session-colors).
+  session waits for you, and green once one has finished its turn. It pops
+  as it does, and can play a sound. See [Session colors](#session-colors).
 - **Panel:**
   - **Header:** the agent's logo, name and plan, with refresh, *Open agent*,
     ⚙ settings and ⏻ buttons. ⏻ switches it off: see
@@ -243,6 +243,43 @@ The robot shows what your Claude Code and OpenCode sessions want:
 - **Left out:** sessions whose agent has quit (say, a closed terminal), and
   sessions nobody touched for a day.
 
+### The pop and the sounds
+
+A color in the corner is easy to miss while you're in another window. So
+when a session starts waiting for you, or finishes its turn, the robot can
+say so:
+
+| | What | Default |
+|---|---|---|
+| **Pop the robot** | It grows and springs back once, as it changes color | On |
+| **Sounds** | A double blip when a session waits for you, a rising chime when one has finished | Off |
+
+- **Every session:** a second session finishing pops and sounds too, also
+  when the robot is already green.
+- **Once per wait:** a permission prompt alerts once, however long it waits.
+  The next prompt alerts again.
+- **Close together:** alerts within 3 seconds of the last one count as one.
+  When a session waits and another finishes at the same moment, you hear the
+  blip.
+- **Quiet:** for what was already going on when the panel starts, while the
+  screen is locked, for a subagent finishing, and for a turn you've already
+  seen.
+- **Switching them:** *Pop the robot* and *Sounds*, under *Session colors*
+  in the settings. Both need session colors on.
+- **Trying the sounds:** the play buttons under them, *Input needed* and
+  *Session ready*, play each sound as the robot would, also with *Sounds*
+  off. On GNOME the extension plays them, so it has to be switched on.
+- **No pop** with animations switched off: GNOME's own setting, Cinnamon's
+  effects, or *Reduce motion* on a Mac. GNOME also switches animations off
+  on a machine without a graphics card.
+- **Volume:**
+  - **GNOME and Linux Mint:** an alert sound, at the *System Sounds* volume.
+    On GNOME, *Alert Sound: None* silences it too.
+  - **Mac:** a system sound. It's silent with *Play user interface sound
+    effects* off (System Settings → Sound).
+- **Two sounds at once:** an agent that rings the terminal's bell itself
+  (Claude Code can) rings it as well.
+
 ### How it hooks in
 
 - **Claude Code:** hooks in `~/.claude/settings.json` (or in
@@ -258,7 +295,8 @@ The robot shows what your Claude Code and OpenCode sessions want:
 - **Switching it off:** *Session colors* in the settings (under *Top bar* on
   GNOME, *Panel* on Linux Mint, *Menu bar* on a Mac). That takes the hooks
   and the plugin out again, and they stay out until you switch it back on.
-  `agent-usage uninstall` takes them out too.
+  The pop and the sounds go with them. `agent-usage uninstall` takes them
+  out too.
 - **After the first install on GNOME:** the hooks work right away, but the
   robot only changes color once GNOME has reloaded the extension (see
   [After installing or updating](#after-installing-or-updating)).
@@ -484,11 +522,12 @@ The extension lives in `agent-usage@local/`:
 | `bin/agent-usage-update` | Runs the collectors and writes one JSON file per agent to `~/.local/state/omarchy/agents/usage/`. It's also on your PATH, so `agent-usage-update --force` collects again by hand |
 | `hooks/agent-usage-session` | The [session colors](#session-colors)' hook for Claude Code, which writes one small file per session to `~/.local/state/omarchy/agents/sessions/`. Its `install`, `uninstall` and `status` add and remove the hooks in Claude Code and the plugin in OpenCode. Outside `bin/`, where everything is a collector |
 | `hooks/opencode-agent-usage.js` | The OpenCode 2 plugin that writes the same files for OpenCode sessions |
-| `panel.js`, `usage.js`, `sessions.js`, `updates.js`, `stylesheet.css` | The panel. It schedules the updater, displays those JSON files, and colors the robot by the session files. The Cinnamon applet uses the same files |
-| `extension.js` | GNOME's top-bar button and the menu around the panel |
+| `panel.js`, `usage.js`, `sessions.js`, `updates.js`, `stylesheet.css` | The panel. It schedules the updater, displays those JSON files, and colors, pops and sounds the robot by the session files. The Cinnamon applet uses the same files |
+| `sounds/` | The robot's two sounds, `waiting.wav` and `ready.wav`, made by `scripts/make-sounds.py`. The Cinnamon applet and the Mac app play the same files |
+| `extension.js` | GNOME's top-bar button and the menu around the panel, and the D-Bus method the settings window's play buttons call |
 | `terminals.js` | Which agent or desktop app to open, how to start each terminal, and the sign-in commands. The panel and the settings window both use it |
 | `versions.js` | Compares release versions for the update notice |
-| `prefs.js`, `schemas/` | The settings window and its settings: the refresh intervals, which limit the top bar shows, the session colors, the agent, the terminal, what right-click does and update checks |
+| `prefs.js`, `schemas/` | The settings window and its settings: the refresh intervals, which limit the top bar shows, the session colors with their pop and sounds, the agent, the terminal, what right-click does and update checks |
 
 Around it, in the repository:
 
@@ -498,6 +537,7 @@ Around it, in the repository:
 | `bin/agent-usage` | `update`, `version`, `latest`, `diagnose`, `uninstall` |
 | `install.sh`, `uninstall.sh`, `diagnose.sh`, `preview.sh` | Install, remove, debug and preview the extension. In a Cinnamon session the first three hand over to `cinnamon/` |
 | `scripts/common.sh` | What the GNOME and Cinnamon scripts share |
+| `scripts/make-sounds.py` | Makes the robot's sounds from sine waves, the same every time |
 | `VERSION`, `CHANGELOG.md`, `scripts/release.sh` | Releases (see [Releasing](#releasing)) |
 | `patches/`, `test/` | The changes to Omarchy's collectors, and the tests |
 | `cinnamon/` | The Cinnamon applet: see below |
@@ -510,7 +550,7 @@ panel when it's installed:
 |---|---|
 | `agent-usage@local/applet.js` | The applet in the panel, its popup, its settings and clicks |
 | `agent-usage@local/settings-schema.json`, `metadata.json`, `stylesheet.css`, `icon.png` | Cinnamon's settings window, the applet's details, Cinnamon's additions to the stylesheet, the icon in System Settings |
-| `build-applet.sh` | Builds the applet: those files, the collectors, session hooks and icons, the shared stylesheet, and the shared modules rewritten for Cinnamon |
+| `build-applet.sh` | Builds the applet: those files, the collectors, session hooks, icons and sounds, the shared stylesheet, and the shared modules rewritten for Cinnamon |
 | `esm-to-cinnamon.py` | Rewrites a shared module (an ES module) into the form Cinnamon loads |
 | `install.sh`, `uninstall.sh`, `diagnose.sh` | Install, remove and debug the applet |
 | `cinnamon-state.py` | Asks the running Cinnamon whether the applet loaded, and for its log lines |
@@ -524,7 +564,7 @@ session hooks:
 | `Sources/AgentUsageCore/` | Everything the panel decides without a screen, ported from `usage.js`, `sessions.js`, `updates.js`, `versions.js` and `terminals.js`. It also runs the collectors itself, since `agent-usage-update` needs bash 4 and a Mac has 3.2. Foundation only, so it builds and tests on Linux too |
 | `Sources/AgentUsage/` | The menu bar item, the panel (SwiftUI), the settings window, the timers, the update check, start at login |
 | `Resources/` | `Info.plist`, the icons as PDFs and JetBrains Mono |
-| `build-app.sh` | Builds `Agent Usage.app`: universal, signed ad hoc, with the collectors from `agent-usage@local/bin` and the session hooks from `agent-usage@local/hooks` |
+| `build-app.sh` | Builds `Agent Usage.app`: universal, signed ad hoc, with the collectors from `agent-usage@local/bin`, the session hooks from `agent-usage@local/hooks` and the sounds from `agent-usage@local/sounds` |
 | `agent-usage` | The Mac's `agent-usage` command, inside the app |
 | `Tests/`, `test/` | The Swift tests, and the Mac's install, update and uninstall test |
 
@@ -613,6 +653,7 @@ python3 test/claude-keychain-test.py            # Claude sign-in from the macOS 
 python3 test/codex-sign-in-test.py              # Codex signed out, with a fake app server
 python3 test/session-hooks-test.py              # the session colors' hook, and adding it to Claude Code and OpenCode
 node test/opencode-plugin-test.mjs              # the OpenCode plugin, with a stand-in OpenCode
+python3 test/sounds-test.py                     # the robot's sounds are what scripts/make-sounds.py makes
 test/cli-test.sh                                # install, update, uninstall from git, on GNOME and Mint
 (cd macos && swift test)                        # the macOS app's logic, on Linux too
 ```

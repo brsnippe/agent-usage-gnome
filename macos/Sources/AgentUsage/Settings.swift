@@ -103,6 +103,8 @@ struct SettingsView: View {
     @AppStorage(Settings.scanInterval) private var scan = 15
     @AppStorage(Settings.sessionThreshold) private var sessionFrom = 40
     @AppStorage(Settings.sessionColors) private var sessionColors = true
+    @AppStorage(Settings.sessionPop) private var sessionPop = true
+    @AppStorage(Settings.sessionSounds) private var sessionSounds = false
     @AppStorage(Settings.agent) private var agent = "opencode"
     @AppStorage(Settings.agentCommand) private var agentCommand = ""
     @AppStorage(Settings.terminal) private var terminal = "auto"
@@ -143,10 +145,20 @@ struct SettingsView: View {
                     }
                 }
                 Toggle("Session colors", isOn: $sessionColors)
+                // Both follow the sessions through the same hooks.
+                Toggle("Pop the robot", isOn: $sessionPop).disabled(!sessionColors)
+                Toggle("Sounds", isOn: $sessionSounds).disabled(!sessionColors)
+                // As the robot plays them, also with the switch off.
+                LabeledContent("Try the sounds") {
+                    HStack {
+                        Button("Input needed") { Sounds.play(.waiting) }
+                        Button("Session ready") { Sounds.play(.ready) }
+                    }
+                }
             } header: {
                 Text("Menu bar")
             } footer: {
-                note("Once the 5-hour session limit is this full, the menu bar shows it, even when the weekly limit is fuller. Below it, the menu bar shows the fullest limit. 0% always shows the session limit. With session colors, the robot turns orange while a Claude Code or OpenCode session waits for you, and green once one has finished, until you open the panel. They work through hooks in Claude Code and a plugin in OpenCode 2; switching them off removes those.")
+                note("Once the 5-hour session limit is this full, the menu bar shows it, even when the weekly limit is fuller. Below it, the menu bar shows the fullest limit. 0% always shows the session limit. With session colors, the robot turns orange while a Claude Code or OpenCode session waits for you, and green once one has finished, until you open the panel. They work through hooks in Claude Code and a plugin in OpenCode 2; switching them off removes those. With them on, the robot can also pop, growing and springing back once, and sound: a double blip when a session waits for you, a rising chime when one has finished. Try the sounds plays them as the robot does, also with Sounds off. They stay quiet with Play user interface sound effects off, in the Sound settings.")
             }
 
             Section {
@@ -218,7 +230,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 580, height: 800)
+        .frame(width: 580, height: 890)
     }
 
     private func note(_ text: String) -> some View {

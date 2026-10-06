@@ -10,12 +10,14 @@
 // draws whatever is there.
 //
 // It also watches ~/.local/state/omarchy/agents/sessions/, where the agents'
-// hooks say which sessions want you (see sessions.js), for the robot's color.
+// hooks say which sessions want you (see sessions.js), for the robot's color,
+// its pop and its sounds.
 //
 // The host:
 //   showTopBar({hasUsage, text, alarming, stale, session})  the icon and
 //                         percentage in the bar; session is 'waiting', 'ready'
 //                         or null
+//   pop()                 the robot grows and springs back once (popActor)
 //   closeMenu(), isMenuOpen(), keepFocus(), scrollToTop()
 //   openSettings()        the settings window
 //   openUpdate()          what clicking "vX.Y.Z available" does
@@ -60,6 +62,12 @@ const SIGN_IN_CHECKS = 20;
 // goes away doesn't change any file.
 const SESSIONS_CHECK_SECONDS = 30;
 const LAUNCH_KEYS = ['agent', 'agent-command', 'terminal', 'terminal-command'];
+// The robot's sounds, sounds/<name>.wav, by the alert they're for.
+const SOUNDS = ['waiting', 'ready'];
+// The robot's pop: up to this size, then a spring back.
+const POP_SCALE = 1.5;
+const POP_GROW_MS = 120;
+const POP_SETTLE_MS = 380;
 
 // Kanagawa, as Omarchy draws it. The bars are painted with Cairo, so they
 // take their colors from here; everything else is in stylesheet.css.
@@ -153,6 +161,33 @@ function readJsonFiles(path) {
     return contents;
 }
 
+function scaleTo(actor, scale, duration, mode) {
+    actor.save_easing_state();
+    actor.set_easing_mode(mode);
+    actor.set_easing_duration(duration);
+    actor.set_scale(scale, scale);
+    actor.restore_easing_state();
+}
+
+// The robot grows and springs back, once. Only its drawing scales, so the bar
+// around it stays put. Plain Clutter easing, which both shells have; GNOME
+// and Cinnamon 6.6 make it instant with animations off, and then there's
+// nothing to see.
+export function popActor(actor) {
+    if (actor.get_transition('scale-x'))
+        return;
+    actor.set_pivot_point(0.5, 0.5);
+    scaleTo(actor, POP_SCALE, POP_GROW_MS, Clutter.AnimationMode.EASE_OUT_QUAD);
+    if (!actor.get_transition('scale-x')) {
+        actor.set_scale(1, 1);
+        return;
+    }
+    const id = actor.connect('transitions-completed', () => {
+        actor.disconnect(id);
+        scaleTo(actor, 1, POP_SETTLE_MS, Clutter.AnimationMode.EASE_OUT_BACK);
+    });
+}
+
 // Linux has a /proc entry for every running process.
 function processRunning(pid) {
     return GLib.file_test(`/proc/${pid}`, GLib.FileTest.EXISTS);
@@ -180,6 +215,10 @@ export class PanelController {
         this._usageDir = `${GLib.get_user_state_dir()}/omarchy/agents/usage`;
         this._sessionsDir = `${GLib.get_user_state_dir()}/omarchy/agents/sessions`;
         this._session = null;
+        // What the sessions were doing at the last look, and when the robot
+        // last popped or sounded (Sessions.sessionAlert).
+        this._alertMarks = null;
+        this._lastAlert = 0;
         this._sessionsMonitor = null;
         this._sessionsReloadId = 0;
         this._sessionsCheckId = 0;
@@ -284,6 +323,14 @@ export class PanelController {
     // A person asked for fresh numbers: the middle click, ↻, or `r`.
     refresh() {
         this._runUpdate('force');
+    }
+
+    // The settings window's play buttons: 'waiting' or 'ready', exactly as an
+    // alert plays it, whatever the switches say.
+    playSound(sound) {
+        if (!SOUNDS.includes(sound))
+            throw new Error(`there's no sound called ${sound}`);
+        this._playSound(sound);
     }
 
     // Cinnamon keeps applets running while the screen is locked, where GNOME
@@ -577,8 +624,11 @@ export class PanelController {
     }
 
     _loadSessions() {
-        const records = this._settings.get_boolean('session-colors') ? readJsonFiles(this._sessionsDir) : [];
-        const session = Sessions.topBarSession(records, {now: Date.now(), seen: this._readSeen(), alive: processRunning});
+        const colors = this._settings.get_boolean('session-colors');
+        const records = colors ? readJsonFiles(this._sessionsDir) : [];
+        const now = Date.now();
+        const seen = this._readSeen();
+        const session = Sessions.topBarSession(records, {now, seen, alive: processRunning});
         this._sessionsCheckId = this._removeSource(this._sessionsCheckId);
         if (records.length > 0) {
             this._sessionsCheckId = this._addSource(GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, SESSIONS_CHECK_SECONDS, () => {
@@ -591,6 +641,42 @@ export class PanelController {
         if (session !== this._session) {
             this._session = session;
             this._showPercent();
+        }
+        // After the color, so the robot pops in its new one. With the colors
+        // off there are no sessions to follow; switched back on, the first
+        // look is quiet again.
+        if (colors)
+            this._alertSessions(records, now, seen);
+        else
+            this._alertMarks = null;
+    }
+
+    // The pop and the sound, when a session starts waiting for you or
+    // finishes its turn. GNOME switches extensions off while the screen is
+    // locked, so nothing alerts then; Cinnamon's applet keeps quiet too.
+    _alertSessions(records, now, seen) {
+        const {alert, marks} = Sessions.sessionAlert(records, {
+            now, seen, alive: processRunning, marks: this._alertMarks, lastAlert: this._lastAlert,
+        });
+        this._alertMarks = marks;
+        if (!alert || this._locked)
+            return;
+        this._lastAlert = now;
+        if (this._settings.get_boolean('session-pop'))
+            this._host.pop();
+        if (this._settings.get_boolean('session-sounds'))
+            this._playSound(alert);
+    }
+
+    // sounds/waiting.wav or sounds/ready.wav, through the sound player both
+    // shells have (mutter's, Muffin's): an alert sound, at the system sounds'
+    // volume. GNOME leaves it out with alert sounds switched off.
+    _playSound(alert) {
+        try {
+            global.display.get_sound_player().play_from_file(
+                Gio.File.new_for_path(`${this._path}/sounds/${alert}.wav`), 'Agent usage', null);
+        } catch (e) {
+            console.warn(`agent-usage: could not play a sound: ${e.message}`);
         }
     }
 

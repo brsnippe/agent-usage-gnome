@@ -143,6 +143,12 @@ session_file() {
   mv "$SESSIONS/.claude-smoke.tmp" "$SESSIONS/claude-smoke.json"
 }
 
+# What the settings window's play buttons do: ask GNOME Shell over D-Bus.
+play_sound() {
+  gdbus call --session --dest org.gnome.Shell --object-path /io/github/brsnippe/AgentUsage \
+    --method io.github.brsnippe.AgentUsage.PlaySound "$1" >/dev/null 2>&1 && echo played || echo failed
+}
+
 # The color an actor is drawn in, as rrggbb.
 color_of() {
   shell "(() => {
@@ -238,7 +244,28 @@ shot_menu panel-codex
 shell "$INDICATOR.menu.close()" >/dev/null
 
 # ---- session colors: orange while a session waits for you, green once one
-# is done, until the panel is opened
+# is done, until the panel is opened. The robot pops and sounds each time.
+gsettings --schemadir "$EXT_DIR/schemas" set org.gnome.shell.extensions.agent-usage session-sounds true
+for _ in $(seq 20); do
+  [[ $(shell "$INDICATOR._settings.get_boolean('session-sounds')") == true ]] && break
+  sleep 0.25
+done
+# Every step of the robot's size, and the sounds it plays (played for real
+# too, into a machine without speakers).
+shell "(() => {
+    const controller = $INDICATOR._controller, icon = $INDICATOR._icon;
+    globalThis.agentUsageAlerts = {scales: [], sounds: []};
+    icon.connect('notify::scale-x', () => agentUsageAlerts.scales.push(icon.scale_x));
+    const play = controller._playSound.bind(controller);
+    controller._playSound = alert => { agentUsageAlerts.sounds.push(alert); play(alert); };
+  })()" >/dev/null
+# The robot's size: how often it changed, how big it got, and where it is now.
+pop_of() {
+  shell "(() => {
+      const scales = agentUsageAlerts.scales;
+      return [scales.length > 4 ? 'animated' : 'instant', Math.max(1, ...scales).toFixed(1), $INDICATOR._icon.scale_x].join(' ');
+    })()"
+}
 session_file waiting
 for _ in $(seq 20); do
   [[ $(shell "$INDICATOR._icon.has_style_class_name('agent-usage-waiting')") == true ]] && break
@@ -246,19 +273,50 @@ for _ in $(seq 20); do
 done
 check "a session waiting for you turns the robot orange" "$(color_of "$INDICATOR._icon")" "ffa066"
 check "and leaves the number as it was" "$(shell "$INDICATOR._label.text + ' ' + $INDICATOR._label.has_style_class_name('agent-usage-waiting')")" "61% false"
+sleep 1
+# GNOME switches animations off without a graphics card, as here.
+check "with animations off, the pop is instant: the robot stays its size" \
+  "$(shell "imports.gi.St.Settings.get().enable_animations") $(pop_of)" "false instant 1.5 1"
+check "and it plays the waiting sound" "$(shell "agentUsageAlerts.sounds.join(' ')")" "waiting"
 shot_actor topbar-waiting "$INDICATOR"
+# What the pop looks like at its biggest.
+shell "$INDICATOR._icon.set_scale(1.5, 1.5)" >/dev/null
+sleep 0.3
+shot_actor topbar-pop "$INDICATOR"
+shell "$INDICATOR._icon.set_scale(1, 1); agentUsageAlerts.scales = []" >/dev/null
+# Alerts closer together than 3 seconds merge. And animations on, as with a
+# graphics card.
+shell "imports.gi.St.Settings.get().uninhibit_animations()" >/dev/null
+sleep 3
 session_file ready
 for _ in $(seq 20); do
   [[ $(shell "$INDICATOR._icon.has_style_class_name('agent-usage-ready')") == true ]] && break
   sleep 0.25
 done
 check "a finished turn turns it green" "$(color_of "$INDICATOR._icon")" "98bb6c"
+sleep 1
+check "and pops the robot: it grows to 1.5 and springs back" "$(pop_of)" "animated 1.5 1"
+check "with the ready sound" "$(shell "agentUsageAlerts.sounds.join(' ')")" "waiting ready"
+shell "imports.gi.St.Settings.get().inhibit_animations()" >/dev/null
 shot_actor topbar-ready "$INDICATOR"
 shell "$INDICATOR.menu.open()" >/dev/null
 sleep 1
 shell "$INDICATOR.menu.close()" >/dev/null
 check "opening the panel clears the green" "$(shell "$INDICATOR._icon.has_style_class_name('agent-usage-ready')")" "false"
+check "quietly" "$(shell "agentUsageAlerts.sounds.join(' ')")" "waiting ready"
 rm -f "$SESSIONS/claude-smoke.json"
+gsettings --schemadir "$EXT_DIR/schemas" reset org.gnome.shell.extensions.agent-usage session-sounds
+
+# ---- the settings window's play buttons, as prefs.js presses them: GNOME
+# Shell plays the sound, also with Sounds switched off
+for _ in $(seq 20); do
+  [[ $(shell "$INDICATOR._settings.get_boolean('session-sounds')") == false ]] && break
+  sleep 0.25
+done
+check "the play buttons play each sound in GNOME Shell, also with Sounds off" \
+  "$(play_sound waiting) $(play_sound ready) $(shell "agentUsageAlerts.sounds.join(' ')")" "played played waiting ready waiting ready"
+check "and no other" "$(play_sound beep)" "failed"
+check "which only the caller hears about" "$(grep -c "no sound called" "$OUT/gnome-shell.log")" "0"
 
 # ---- clicks: right opens the agent, middle refreshes, left opens the panel
 click 3
@@ -322,6 +380,7 @@ check "as the Extensions app would, so it stays off at the next login" \
   "$(gsettings get org.gnome.shell disabled-extensions | grep -c "'$UUID'")" "1"
 check "a notification says how to switch it back on" \
   "$(shell "Main.messageTray.getSources().flatMap(source => source.notifications).some(n => n.title === 'Agent usage' && String(n.body).includes('gnome-extensions enable $UUID'))")" "true"
+check "switched off, nothing plays the sounds" "$(play_sound ready)" "failed"
 gnome-extensions enable "$UUID"
 for _ in $(seq 20); do
   [[ $(shell "Main.panel.statusArea['$UUID']?.visible === true") == true ]] && break
@@ -329,6 +388,8 @@ for _ in $(seq 20); do
 done
 check "gnome-extensions enable brings it back" \
   "$(shell "Main.extensionManager.lookup('$UUID').state + ' ' + $INDICATOR.visible")" "1 true"
+check "with the play buttons' sounds" "$(play_sound ready)" "played"
 
 # ---- nothing went wrong along the way
 check "GNOME Shell logged no JavaScript errors" "$(grep -c 'JS ERROR' "$OUT/gnome-shell.log")" "0"
+check "and played the sounds without one" "$(grep -c 'could not play a sound' "$OUT/gnome-shell.log")" "0"

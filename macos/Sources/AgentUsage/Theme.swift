@@ -1,5 +1,6 @@
 import AgentUsageCore
 import AppKit
+import AudioToolbox
 import CoreText
 import SwiftUI
 
@@ -72,6 +73,10 @@ enum Assets {
         return image
     }()
 
+    /// Nothing, at the robot's size: what the menu bar button shows while the
+    /// robot's pop stands in for it.
+    static let blankRobot = NSImage(size: robot.size, flipped: false) { _ in true }
+
     private static var tintedRobots: [NSColor: NSImage] = [:]
 
     /// The robot for the menu bar: the template one, which macOS colours to
@@ -106,5 +111,26 @@ enum Assets {
             return (image, false)
         }
         return (robot, true)
+    }
+}
+
+/// The robot's sounds, Resources/Sounds/waiting.wav and ready.wav, the GNOME
+/// extension's. Played as system sounds, which stay quiet with "Play user
+/// interface sound effects" off, as GNOME's do with alert sounds off.
+enum Sounds {
+    private static var loaded: [TopBarSession: SystemSoundID] = [:]
+
+    static func play(_ alert: TopBarSession) {
+        if loaded[alert] == nil, let url = Bundle.main.url(forResource: alert.rawValue, withExtension: "wav", subdirectory: "Sounds") {
+            var id: SystemSoundID = 0
+            if AudioServicesCreateSystemSoundID(url as CFURL, &id) == kAudioServicesNoError {
+                loaded[alert] = id
+            } else {
+                Log.write("couldn't load the \(alert.rawValue) sound")
+            }
+        }
+        if let id = loaded[alert] {
+            AudioServicesPlaySystemSound(id)
+        }
     }
 }

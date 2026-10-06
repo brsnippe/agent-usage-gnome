@@ -10,6 +10,9 @@ final class AppModel {
     var onRecordsChange: (() -> Void)?
     /// Something went wrong that the panel should show, even when it's closed.
     var onNotice: (() -> Void)?
+    /// A session started waiting for you, or finished its turn: the robot's
+    /// pop and sound.
+    var onSessionAlert: ((TopBarSession) -> Void)?
     var onOpenSettings: (() -> Void)?
 
     private(set) var providers: [AgentRecord] = []
@@ -30,6 +33,10 @@ final class AppModel {
     private var reloadScheduled = false
     private var sessionsReloadScheduled = false
     private var sessionsTimer: Timer?
+    /// What the sessions were doing at the last look, and when the robot last
+    /// popped or sounded (Sessions.alert).
+    private var alertMarks: [String: String]?
+    private var lastAlert: Double = 0
     private var appliedSessionColors = true
     private var timers: [Timer] = []
     private var retryTimer: Timer?
@@ -207,9 +214,11 @@ final class AppModel {
     }
 
     private func loadSessions() {
-        let records = UserDefaults.standard.bool(forKey: Settings.sessionColors) ? Sessions.load(from: sessionsDir) : []
+        let colors = UserDefaults.standard.bool(forKey: Settings.sessionColors)
+        let records = colors ? Sessions.load(from: sessionsDir) : []
         let seen = Sessions.parseSeen(try? String(contentsOfFile: "\(sessionsDir)/\(Sessions.seenFile)", encoding: .utf8))
-        let next = Sessions.topBar(records, now: Date().timeIntervalSince1970 * 1000, seen: seen, alive: Sessions.processRunning)
+        let now = Date().timeIntervalSince1970 * 1000
+        let next = Sessions.topBar(records, now: now, seen: seen, alive: Sessions.processRunning)
         sessionsTimer?.invalidate()
         sessionsTimer = nil
         if !records.isEmpty {
@@ -221,6 +230,28 @@ final class AppModel {
             session = next
             onRecordsChange?()
         }
+        // After the colour, so the robot pops in its new one. With the colours
+        // off there are no sessions to follow; switched back on, the first
+        // look is quiet again.
+        if colors {
+            alertSessions(records, now: now, seen: seen)
+        } else {
+            alertMarks = nil
+        }
+    }
+
+    /// The pop and the sound, when a session starts waiting for you or
+    /// finishes its turn. Quiet while the screen is locked, as on GNOME,
+    /// which switches extensions off then.
+    private func alertSessions(_ records: [JSONValue], now: Double, seen: Double) {
+        let result = Sessions.alert(records, now: now, seen: seen, alive: Sessions.processRunning, marks: alertMarks, lastAlert: lastAlert)
+        alertMarks = result.marks
+        guard let alert = result.alert, !locked else {
+            return
+        }
+        lastAlert = now
+        Log.write("session alert: \(alert.rawValue)")
+        onSessionAlert?(alert)
     }
 
     /// You looked: the turns that finished so far stop turning the robot green.

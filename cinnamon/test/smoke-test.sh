@@ -234,7 +234,43 @@ applet ".menu.close()" >/dev/null
 sleep 1
 
 # ---- session colors: orange while a session waits for you, green once one
-# is done, until the panel is opened
+# is done, until the panel is opened. The robot pops and sounds each time.
+setting session-sounds true
+for _ in $(seq 20); do
+  [[ $(applet "._settings.getValue('session-sounds')") == true ]] && break
+  sleep 0.25
+done
+# Every step of the robot's size, and the sounds it plays (played for real
+# too, into a machine without speakers).
+state eval "(() => {
+    const applet = $APPLET, icon = applet._applet_icon, controller = applet._controller;
+    globalThis.agentUsageAlerts = {scales: [], sounds: []};
+    icon.connect('notify::scale-x', () => agentUsageAlerts.scales.push(icon.scale_x));
+    const play = controller._playSound.bind(controller);
+    controller._playSound = alert => { agentUsageAlerts.sounds.push(alert); play(alert); };
+  })()" >/dev/null
+# The robot's size: how often it changed, how big it got, and where it is now.
+pop_of() {
+  state eval "(() => {
+      const scales = agentUsageAlerts.scales;
+      return [scales.length > 4 ? 'animated' : scales.length ? 'instant' : 'still', Math.max(1, ...scales).toFixed(1),
+        $APPLET._applet_icon.scale_x].join(' ');
+    })()"
+}
+# Animations on or off, as Cinnamon has them with effects switched on or off;
+# without an argument, back to what Cinnamon had.
+animations() {
+  local wanted="${1:-}"
+  state eval "(() => {
+      const main = imports.ui.main, settings = imports.gi.St.Settings.get();
+      const has = 'animations_enabled' in settings;
+      globalThis.agentUsageAnimations ??= [main.animations_enabled, has && settings.animations_enabled];
+      const [on, st] = '$wanted' === '' ? agentUsageAnimations : ['$wanted' === 'on', '$wanted' === 'on'];
+      main.animations_enabled = on;
+      if (has) settings.animations_enabled = st;
+    })()" >/dev/null
+}
+animations off
 session_file waiting
 for _ in $(seq 20); do
   [[ $(applet "._applet_icon.has_style_class_name('agent-usage-waiting')") == true ]] && break
@@ -243,22 +279,55 @@ done
 check "a session waiting for you turns the robot orange" "$(color_of "._applet_icon")" "ffa066"
 check "and leaves the number as it was" \
   "$(applet "._applet_label.get_text()") $(applet "._applet_label.has_style_class_name('agent-usage-waiting')")" "61% false"
+sleep 1
+check "with animations off, the robot doesn't pop" "$(pop_of)" "still 1.0 1"
+check "but it plays the waiting sound" "$(state eval "agentUsageAlerts.sounds.join(' ')")" "waiting"
 applet ".on_panel_height_changed()" >/dev/null
 check "and stays orange when the panel changes height" "$(applet "._applet_icon.has_style_class_name('agent-usage-waiting')")" "true"
 shot_actor topbar-waiting ".actor"
+# What the pop looks like at its biggest.
+applet "._applet_icon.set_pivot_point(0.5, 0.5)" >/dev/null
+applet "._applet_icon.set_scale(1.5, 1.5)" >/dev/null
+sleep 0.3
+shot_actor topbar-pop ".actor"
+applet "._applet_icon.set_scale(1, 1)" >/dev/null
+state eval "agentUsageAlerts.scales = []" >/dev/null
+# Alerts closer together than 3 seconds merge.
+animations on
+sleep 3
 session_file ready
 for _ in $(seq 20); do
   [[ $(applet "._applet_icon.has_style_class_name('agent-usage-ready')") == true ]] && break
   sleep 0.25
 done
 check "a finished turn turns it green" "$(color_of "._applet_icon")" "98bb6c"
+sleep 1
+check "and pops the robot: it grows to 1.5 and springs back" "$(pop_of)" "animated 1.5 1"
+check "with the ready sound" "$(state eval "agentUsageAlerts.sounds.join(' ')")" "waiting ready"
+animations
 shot_actor topbar-ready ".actor"
 applet ".on_applet_clicked()" >/dev/null
 sleep 1
 applet ".menu.close()" >/dev/null
 check "opening the panel clears the green" "$(applet "._applet_icon.has_style_class_name('agent-usage-ready')")" "false"
+check "quietly" "$(state eval "agentUsageAlerts.sounds.join(' ')")" "waiting ready"
 rm -f "$SESSIONS/claude-smoke.json"
+setting session-sounds false
 sleep 1
+
+# ---- the settings window's play buttons, pressed as that window presses
+# them: they play also with Sounds switched off
+for _ in $(seq 20); do
+  [[ $(applet "._settings.getValue('session-sounds')") == false ]] && break
+  sleep 0.25
+done
+for callback in playWaiting playReady; do
+  gdbus call --session --dest org.Cinnamon --object-path /org/Cinnamon --method org.Cinnamon.activateCallback \
+    "$callback" "$UUID" "$(basename "$settings" .json)" >/dev/null
+done
+sleep 0.5
+check "the play buttons play each sound, also with Sounds off" \
+  "$(state eval "agentUsageAlerts.sounds.join(' ')")" "waiting ready waiting ready"
 
 # ---- a right click opens the agent, outside panel edit mode
 applet "._onButtonPressEvent(null, {get_button: () => 3})" >/dev/null
@@ -332,3 +401,4 @@ check "added back, it loads with the same settings" "$(state status) $(applet ".
 state log >"$OUT/applet-log.txt" 2>&1
 check "Cinnamon logged no errors from the applet" "$(grep -c '^error:' "$OUT/applet-log.txt")" "0"
 check "nor any deprecation warnings" "$(grep -ci 'deprecated' "$OUT/applet-log.txt")" "0"
+check "and played the sounds without one" "$(grep -c 'could not play a sound' "$OUT/applet-log.txt")" "0"

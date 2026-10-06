@@ -8,6 +8,12 @@ import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/ex
 import * as Terminals from './terminals.js';
 import {isNewer} from './versions.js';
 
+// The extension, inside GNOME Shell, plays a sound when asked here
+// (extension.js), the same way it plays an alert.
+const SOUNDS_PATH = '/io/github/brsnippe/AgentUsage';
+const SOUNDS_INTERFACE = 'io.github.brsnippe.AgentUsage';
+const TRY_SOUNDS = 'As the robot plays them, also with Sounds switched off: at the volume of the system sounds, and silent with alert sounds switched off.';
+
 // A dropdown over string ids: shows `labels`, stores the matching id.
 function choiceRow(settings, key, title, ids, labels) {
     const row = new Adw.ComboRow({title, model: Gtk.StringList.new(labels), use_markup: false});
@@ -32,7 +38,7 @@ export default class AgentUsagePreferences extends ExtensionPreferences {
 
         const page = new Adw.PreferencesPage({title: 'General', icon_name: 'preferences-system-symbolic'});
         page.add(this._refreshGroup(settings));
-        page.add(this._topBarGroup(settings));
+        page.add(this._topBarGroup(settings, cancellable));
         page.add(this._launchGroup(settings));
         page.add(this._updatesGroup(settings, cancellable));
         window.add(page);
@@ -144,7 +150,7 @@ export default class AgentUsagePreferences extends ExtensionPreferences {
         return group;
     }
 
-    _topBarGroup(settings) {
+    _topBarGroup(settings, cancellable) {
         const group = new Adw.PreferencesGroup({title: 'Top bar'});
         const session = new Adw.SpinRow({
             title: 'Show the session limit from',
@@ -160,7 +166,46 @@ export default class AgentUsagePreferences extends ExtensionPreferences {
         });
         settings.bind('session-colors', colors, 'active', Gio.SettingsBindFlags.DEFAULT);
         group.add(colors);
+
+        // Both follow the sessions through the same hooks.
+        const pop = new Adw.SwitchRow({
+            title: 'Pop the robot',
+            subtitle: 'It grows and springs back once when a session starts waiting for you or finishes its turn.',
+        });
+        settings.bind('session-pop', pop, 'active', Gio.SettingsBindFlags.DEFAULT);
+        settings.bind('session-colors', pop, 'sensitive', Gio.SettingsBindFlags.GET);
+        group.add(pop);
+
+        const sounds = new Adw.SwitchRow({
+            title: 'Sounds',
+            subtitle: 'A double blip when a session waits for you, a rising chime when one has finished. At the volume of the system sounds; silent with alert sounds switched off.',
+        });
+        settings.bind('session-sounds', sounds, 'active', Gio.SettingsBindFlags.DEFAULT);
+        settings.bind('session-colors', sounds, 'sensitive', Gio.SettingsBindFlags.GET);
+        group.add(sounds);
+
+        const trySounds = new Adw.ActionRow({title: 'Try the sounds', subtitle: TRY_SOUNDS, use_markup: false});
+        for (const [label, sound] of [['Input needed', 'waiting'], ['Session ready', 'ready']]) {
+            const button = new Gtk.Button({label, valign: Gtk.Align.CENTER});
+            button.connect('clicked', () => this._playSound(sound, trySounds, cancellable));
+            trySounds.add_suffix(button);
+        }
+        group.add(trySounds);
         return group;
+    }
+
+    // GNOME Shell plays it, so it sounds exactly as an alert does.
+    _playSound(sound, row, cancellable) {
+        Gio.DBus.session.call('org.gnome.Shell', SOUNDS_PATH, SOUNDS_INTERFACE, 'PlaySound', new GLib.Variant('(s)', [sound]),
+            null, Gio.DBusCallFlags.NONE, 2000, cancellable, (connection, result) => {
+                try {
+                    connection.call_finish(result);
+                    row.subtitle = TRY_SOUNDS;
+                } catch (e) {
+                    if (!e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
+                        row.subtitle = "Couldn't play it: Agent Usage isn't running in GNOME Shell. Switch it on in the Extensions app; right after installing, log out and back in first.";
+                }
+            });
     }
 
     _launchGroup(settings) {

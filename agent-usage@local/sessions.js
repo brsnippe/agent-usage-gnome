@@ -11,11 +11,15 @@
 // epoch milliseconds. Opening the panel writes the time to `.seen` there, and
 // turns that finished before it no longer count. Like usage.js, this imports
 // nothing from GNOME Shell, so the tests run it under plain `gjs -m`.
+//
+// The same files say when the robot pops and sounds: see sessionAlert.
 
 export const STATES = ['idle', 'working', 'waiting', 'ready'];
 export const SEEN_FILE = '.seen';
 // A session nobody has touched for this long is left out, whatever it says.
 export const MAX_AGE_MS = 24 * 60 * 60 * 1000;
+// Alerts this close after the last one merge into it.
+export const ALERT_MERGE_MS = 3000;
 
 function finite(value) {
     const n = Number(value);
@@ -61,6 +65,33 @@ export function topBarSession(records, {now = Date.now(), seen = 0, alive = () =
     if (sessions.some(session => session.state === 'ready' && session.parent === null && session.since > seen))
         return 'ready';
     return null;
+}
+
+// Whether the robot pops and sounds: 'waiting' when a session has started
+// waiting for you since the last look, 'ready' when one has finished a turn
+// you haven't seen, otherwise null. `marks` is what the last look returned:
+// each session's state and since, so every state alerts once, also when the
+// robot already has that color (a second session finishing). The first look
+// (`marks` null) only takes note, so starting up is quiet. Nothing alerts
+// within ALERT_MERGE_MS of `lastAlert`, and waiting beats ready. The rules
+// are the colors': a subagent alerts when it waits, not when it finishes.
+export function sessionAlert(records, {now = Date.now(), seen = 0, alive = () => true, marks = null, lastAlert = 0} = {}) {
+    const next = {};
+    let alert = null;
+    for (const session of liveSessions(records, {now, alive})) {
+        const key = `${session.agent}/${session.session}`;
+        const mark = `${session.state}@${session.since}`;
+        next[key] = mark;
+        if (marks === null || marks[key] === mark)
+            continue;
+        if (session.state === 'waiting')
+            alert = 'waiting';
+        else if (session.state === 'ready' && session.parent === null && session.since > seen && alert === null)
+            alert = 'ready';
+    }
+    if (now >= lastAlert && now - lastAlert < ALERT_MERGE_MS)
+        alert = null;
+    return {alert, marks: next};
 }
 
 // `.seen`: the epoch milliseconds the panel was last opened, or 0.

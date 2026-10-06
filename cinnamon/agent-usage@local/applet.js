@@ -25,7 +25,7 @@ function load(name) {
     return me?.imports ? me.imports[name] : require(`./${name}`);
 }
 
-const {PanelController} = load('panel');
+const {PanelController, popActor} = load('panel');
 const Terminals = load('terminals');
 
 const TERMINAL_SCHEMA = 'org.cinnamon.desktop.default-applications.terminal';
@@ -71,6 +71,7 @@ class AgentUsageApplet extends Applet.TextIconApplet {
             installedVersion: metadata.version ?? '',
             host: {
                 showTopBar: state => this._showTopBar(state),
+                pop: () => this._pop(),
                 closeMenu: () => this.menu.close(),
                 isMenuOpen: () => this.menu.isOpen,
                 keepFocus: () => this._keepFocus(),
@@ -169,6 +170,15 @@ class AgentUsageApplet extends Applet.TextIconApplet {
         this._controller.launchAgent();
     }
 
+    // The settings window's play buttons: each sound as the robot plays it.
+    playWaiting() {
+        this._controller.playSound('waiting');
+    }
+
+    playReady() {
+        this._controller.playSound('ready');
+    }
+
     // "Update now" in the settings, and "vX.Y.Z available" in the panel:
     // `agent-usage update` in the chosen terminal, which waits for Enter at
     // the end. The installer reloads the applet, so nothing needs restarting.
@@ -220,6 +230,13 @@ class AgentUsageApplet extends Applet.TextIconApplet {
                     actor.remove_style_class_name(name);
             }
         }
+    }
+
+    // Cinnamon 6.6 makes animations instant when effects are switched off, or
+    // without a graphics card; 6.0 to 6.4 don't, so the applet asks.
+    _pop() {
+        if (this._applet_icon && Main.animations_enabled !== false)
+            popActor(this._applet_icon);
     }
 
     // Rebuilding the panel destroys whatever had keyboard focus; hand it back

@@ -54,6 +54,8 @@ public enum Sessions {
     public static let seenFile = ".seen"
     /// A session nobody has touched for this long is left out, whatever it says.
     public static let maxAge: Double = 24 * 60 * 60 * 1000
+    /// Alerts this close after the last one, in milliseconds, merge into it.
+    public static let alertMerge: Double = 3000
 
     public static func directory(environment: [String: String], home: String) -> String {
         let state = environment["XDG_STATE_HOME"].flatMap { $0.isEmpty ? nil : $0 } ?? "\(home)/.local/state"
@@ -92,6 +94,38 @@ public enum Sessions {
             return .ready
         }
         return nil
+    }
+
+    /// Whether the robot pops and sounds: `.waiting` when a session has
+    /// started waiting for you since the last look, `.ready` when one has
+    /// finished a turn you haven't seen, otherwise nil. `marks` is what the
+    /// last look returned: each session's state and since, so every state
+    /// alerts once, also when the robot already has that colour (a second
+    /// session finishing). The first look (`marks` nil) only takes note, so
+    /// starting up is quiet. Nothing alerts within `alertMerge` of
+    /// `lastAlert`, and waiting beats ready. The rules are the colours': a
+    /// subagent alerts when it waits, not when it finishes.
+    public static func alert(_ records: [JSONValue], now: Double, seen: Double, alive: (Int32) -> Bool,
+                             marks: [String: String]?, lastAlert: Double) -> (alert: TopBarSession?, marks: [String: String]) {
+        var next: [String: String] = [:]
+        var alert: TopBarSession?
+        for session in live(records, now: now, alive: alive) {
+            let key = "\(session.agent)/\(session.session)"
+            let mark = "\(session.state.rawValue)@\(session.since)"
+            next[key] = mark
+            guard let marks, marks[key] != mark else {
+                continue
+            }
+            if session.state == .waiting {
+                alert = .waiting
+            } else if session.state == .ready, session.parent == nil, session.since > seen, alert == nil {
+                alert = .ready
+            }
+        }
+        if now >= lastAlert, now - lastAlert < alertMerge {
+            alert = nil
+        }
+        return (alert, next)
     }
 
     /// `.seen`: the epoch milliseconds the panel was last opened, or 0.
