@@ -3,6 +3,27 @@
 Versions are git tags (`v0.6.0`, …). `agent-usage update` installs the newest
 one.
 
+## 0.13.0
+
+⏻ in the panel switches it off. On GNOME, Linux Mint and a Mac.
+
+- **⏻ after ⚙** in the panel's header, and `q` while the panel is open. An
+  empty panel has ⚙ and ⏻ too. See the README's *Switching it off* section.
+  - **Mac:** quits right away, and so does ⌘Q in the panel. It starts again
+    at login, or from Spotlight.
+  - **GNOME:** asks first, then switches the extension off, as the
+    Extensions app does. It stays off, also after you log in again, until
+    you switch it back on there or with
+    `gnome-extensions enable agent-usage@local`.
+  - **Linux Mint:** asks first, then takes the applet off the panel, as
+    Cinnamon's *Remove* does. Right-click the panel, *Applets*, to add it
+    back; your settings are kept.
+  - **Nothing is lost:** settings, usage data and the session colors' hooks
+    stay.
+- **`agent-usage diagnose`** on GNOME shows `disabled-extensions` too.
+- **Tests:** switching off and back on, in the real GNOME Shell and
+  Cinnamon, with a screenshot of the question.
+
 ## 0.12.0
 
 The robot says when an agent wants you. On GNOME, Linux Mint and a Mac.
