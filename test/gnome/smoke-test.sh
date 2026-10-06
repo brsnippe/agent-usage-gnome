@@ -266,6 +266,11 @@ for _ in $(seq 20); do
 done
 check "Switch off switches the extension off, and the robot goes" \
   "$(shell "Main.extensionManager.lookup('$UUID').state + ' ' + ('$UUID' in Main.panel.statusArea)")" "2 false"
+# GNOME Shell's write reaches gsettings here a moment after it's done there.
+for _ in $(seq 20); do
+  [[ $(gsettings get org.gnome.shell disabled-extensions | grep -c "'$UUID'") == 1 ]] && break
+  sleep 0.25
+done
 check "as the Extensions app would, so it stays off at the next login" \
   "$(gsettings get org.gnome.shell disabled-extensions | grep -c "'$UUID'")" "1"
 check "a notification says how to switch it back on" \
