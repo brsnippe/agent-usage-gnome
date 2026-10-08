@@ -41,8 +41,13 @@ final class PanelModel: ObservableObject {
     /// The visible height when the panel scrolls, or nil to show all of it.
     @Published var viewport: CGFloat?
     var actions = PanelActions()
+    /// Set while a hover change lands. Hover changes colours only (the footer
+    /// stays one line), so the window needn't measure the panel again.
+    private(set) var hovering = false
 
     func hover(_ row: String, text: String?, inside: Bool) {
+        hovering = true
+        defer { hovering = false }
         if inside {
             state.hoveredRow = row
             state.hoverText = text
@@ -348,6 +353,8 @@ struct ActionButton: View {
         }
         .buttonStyle(.plain)
         .help(hint)
+        // A symbol says nothing to VoiceOver; the hint does.
+        .accessibilityLabel(hint)
         .onHover { model.hover("action-\(symbol)", text: hint, inside: $0) }
     }
 }

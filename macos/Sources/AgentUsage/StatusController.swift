@@ -41,7 +41,12 @@ final class StatusController: NSObject, NSWindowDelegate {
         model.onRecordsChange = { [weak self] in self?.updateMenuBar() }
         model.onNotice = { [weak self] in self?.open() }
         model.onSessionAlert = { [weak self] in self?.alert($0) }
-        changes = model.panel.objectWillChange.sink { [weak self] _ in self?.scheduleResize() }
+        changes = model.panel.objectWillChange.sink { [weak self] _ in
+            // Hover changes colour only, so the panel keeps its height.
+            if self?.model.panel.hovering == false {
+                self?.scheduleResize()
+            }
+        }
         updateMenuBar()
     }
 
@@ -77,9 +82,16 @@ final class StatusController: NSObject, NSWindowDelegate {
             button.imagePosition = .imageOnly
             return
         }
-        var color = alarming ? Theme.urgentNS : NSColor.labelColor
-        if Panel.menuBarStale(providers) {
-            color = color.withAlphaComponent(Panel.staleOpacity)
+        // The bar's text colour follows the wallpaper behind it, per screen,
+        // not the system setting. Dynamic colours resolve when each bar draws
+        // them; withAlphaComponent on one resolves it right away, in the app's
+        // own appearance, and hands every bar the same fixed black or white.
+        let stale = Panel.menuBarStale(providers)
+        let color: NSColor
+        if alarming {
+            color = stale ? Theme.urgentNS.withAlphaComponent(Panel.staleOpacity) : Theme.urgentNS
+        } else {
+            color = stale ? Theme.fadedNS : .labelColor
         }
         button.imagePosition = .imageLeading
         button.attributedTitle = NSAttributedString(string: " " + text, attributes: [
@@ -128,7 +140,10 @@ final class StatusController: NSObject, NSWindowDelegate {
         layer.frame = cell.imageRect(forBounds: button.bounds)
         layer.contentsScale = scale
         layer.contentsGravity = .resizeAspect
-        layer.contents = robot.layerContents(forContentsScale: scale)
+        // In the bar's appearance, as the button draws it: the tint is dynamic.
+        button.effectiveAppearance.performAsCurrentDrawingAppearance {
+            layer.contents = robot.layerContents(forContentsScale: scale)
+        }
         host.addSublayer(layer)
         popLayer = layer
         popRobot = robot
@@ -193,7 +208,7 @@ final class StatusController: NSObject, NSWindowDelegate {
         outsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
             self?.close()
         }
-        tickTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in self?.model.tick() }
+        tickTimer = Timer.lenient(30, repeats: true) { [weak self] in self?.model.tick() }
     }
 
     func close() {

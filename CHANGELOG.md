@@ -3,6 +3,22 @@
 Versions are git tags (`v0.6.0`, …). `agent-usage update` installs the newest
 one.
 
+## 0.15.1
+
+On a Mac, the menu bar's colours follow the bar they're drawn on.
+
+- **The faded percentage,** while the numbers are stale, was dark grey on a
+  dark menu bar in light mode, and differed between screens. It's now the
+  bar's own text colour at the usual fade, on every screen.
+- **Orange and green on a light bar:** the robot uses Kanagawa's darker
+  lotus colours there, which read on white. On a dark bar nothing changes.
+- **The settings window** can be made shorter, so it fits a MacBook's
+  screen. The form scrolls.
+- **VoiceOver** names the panel's buttons.
+- **Less power:** the timers give macOS leeway to bundle wake-ups, and the
+  collectors run as background work, on the efficiency cores. Hovering over
+  the panel no longer measures it again.
+
 ## 0.15.0
 
 The robot pops, and can sound, when a session wants you. On GNOME, Linux

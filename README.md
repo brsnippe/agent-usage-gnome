@@ -136,6 +136,10 @@ xattr -dr com.apple.quarantine "Agent Usage.app"
 ### What's different from GNOME
 
 - **The robot is always in the menu bar,** even before there's usage to show.
+- **Its colours follow each screen's menu bar.** macOS makes the bar light or
+  dark with the wallpaper behind it, whatever the system setting. The
+  percentage and its fade follow the bar, and so does the robot: on a light
+  bar it uses Kanagawa's darker lotus orange and green, which read on white.
 - **Clicks:**
   - left-click opens the panel;
   - right-click (a two-finger click on a trackpad) or Control-click opens your
@@ -145,7 +149,8 @@ xattr -dr com.apple.quarantine "Agent Usage.app"
 
   The keys are the same as on GNOME.
 - **Settings:** the panel's ⚙ button, or open Agent Usage again from Finder or
-  Spotlight. The options are GNOME's, plus *Start at login* and *Quit*.
+  Spotlight. The options are GNOME's, plus *Start at login* and *Quit*. The
+  window can be made shorter, for a MacBook's screen; it scrolls then.
 - **Quitting:** the panel's ⏻ button, `q` or ⌘Q quits right away. See
   [Switching it off](#switching-it-off).
 - **Terminals:** *Automatic* means Terminal. You can also pick iTerm2,

@@ -99,13 +99,15 @@ struct MenuBarSamples: View {
 
     private func bar(dark: Bool) -> some View {
         let text = dark ? Color.white : Color.black
+        // The robot's colours are dynamic; here they're fixed to this bar's.
+        let appearance = NSAppearance(named: dark ? .darkAqua : .aqua)!
         return VStack(alignment: .leading, spacing: 6) {
             label("61%", color: text)
             label("94%", color: Theme.urgent, robot: Theme.urgentNS)
             label("61%", color: text, faded: true)
             label(nil, color: text)
-            label("61%", color: text, robot: Theme.waitingNS)
-            label("61%", color: text, robot: Theme.readyNS)
+            label("61%", color: text, robot: Theme.waitingNS.resolved(in: appearance))
+            label("61%", color: text, robot: Theme.readyNS.resolved(in: appearance))
         }
         .padding(10)
         .background(dark ? Color(hex: 0x2A2A2E) : Color(hex: 0xECECEC))
