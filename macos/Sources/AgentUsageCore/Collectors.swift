@@ -104,6 +104,11 @@ public enum Collectors {
         process.standardOutput = output
         process.standardError = log ?? FileHandle.nullDevice
         process.standardInput = FileHandle.nullDevice
+        #if os(macOS)
+        // Background work: the Mac runs it on its efficiency cores, out of
+        // the way of what you're doing.
+        process.qualityOfService = .utility
+        #endif
         do {
             try process.run()
         } catch {

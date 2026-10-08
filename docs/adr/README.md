@@ -93,6 +93,7 @@ It was built iteratively with an AI coding agent: Claude Opus 5.5, running in
 | [0032](0032-switching-it-off.md) | Switching it off: ⏻ in the panel | Accepted |
 | [0033](0033-right-click-setting.md) | Right-click opening the agent is a setting | Accepted |
 | [0034](0034-pop-and-sounds.md) | The robot pops and sounds when a session wants you | Accepted |
+| [0035](0035-menu-bar-colors-follow-the-bar.md) | The Mac's menu bar colours follow the bar they're drawn on | Accepted |
 
 ## Open items
 
@@ -156,3 +157,7 @@ It was built iteratively with an AI coding agent: Claude Opus 5.5, running in
   - both sounds at a real volume, through a desktop's sound settings;
   - the pop on a real panel, at the panel's own height;
   - the Mac's pop, which only CI has run, inside a real menu bar.
+- **The Mac's light-bar colours haven't been seen on a light menu bar yet**
+  ([0035](0035-menu-bar-colors-follow-the-bar.md)): the lotus orange and
+  green robot, and the black fade. The trial ran on a dark bar, on two
+  screens.
