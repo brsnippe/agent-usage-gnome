@@ -17,7 +17,10 @@ final class SettingsWindowController {
         if window == nil {
             let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView(model: model)))
             window.title = "Agent Usage Settings"
-            window.styleMask = [.titled, .closable]
+            // Resizable in height: at its full height it doesn't fit a
+            // MacBook's screen, and the form scrolls.
+            window.styleMask = [.titled, .closable, .resizable]
+            window.collectionBehavior = .fullScreenNone
             window.isReleasedWhenClosed = false
             window.center()
             self.window = window
@@ -230,7 +233,8 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 580, height: 890)
+        .frame(width: 580)
+        .frame(minHeight: 400, idealHeight: 890)
     }
 
     private func note(_ text: String) -> some View {

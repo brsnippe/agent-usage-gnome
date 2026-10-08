@@ -27,7 +27,9 @@ final class AppModel {
     private let collectors: [Collector]
     private let python: String?
     private let environment: [String: String]
-    private let worker = DispatchQueue(label: "agent-usage.collectors")
+    /// Utility priority: background work, which the Mac puts on its efficiency
+    /// cores and out of the way of what you're doing.
+    private let worker = DispatchQueue(label: "agent-usage.collectors", qos: .utility)
     private var watcher: DispatchSourceFileSystemObject?
     private var sessionsWatcher: DispatchSourceFileSystemObject?
     private var reloadScheduled = false
@@ -222,7 +224,7 @@ final class AppModel {
         sessionsTimer?.invalidate()
         sessionsTimer = nil
         if !records.isEmpty {
-            sessionsTimer = Timer.scheduledTimer(withTimeInterval: Self.sessionsCheckSeconds, repeats: false) { [weak self] _ in
+            sessionsTimer = Timer.lenient(Self.sessionsCheckSeconds, repeats: false) { [weak self] in
                 self?.loadSessions()
             }
         }
@@ -297,7 +299,7 @@ final class AppModel {
         guard !agents.isEmpty, retryTimer == nil else {
             return
         }
-        retryTimer = Timer.scheduledTimer(withTimeInterval: Self.retrySeconds, repeats: false) { [weak self] _ in
+        retryTimer = Timer.lenient(Self.retrySeconds, repeats: false) { [weak self] in
             self?.retryTimer = nil
             self?.runScheduled(.limits, agents: agents)
         }
@@ -311,8 +313,8 @@ final class AppModel {
         let limits = max(30, defaults.integer(forKey: Settings.limitsInterval))
         let scan = 60 * max(5, defaults.integer(forKey: Settings.scanInterval))
         timers = [
-            Timer.scheduledTimer(withTimeInterval: TimeInterval(limits), repeats: true) { [weak self] _ in self?.runScheduled(.limits) },
-            Timer.scheduledTimer(withTimeInterval: TimeInterval(scan), repeats: true) { [weak self] _ in self?.runScheduled(.normal) },
+            Timer.lenient(TimeInterval(limits), repeats: true) { [weak self] in self?.runScheduled(.limits) },
+            Timer.lenient(TimeInterval(scan), repeats: true) { [weak self] in self?.runScheduled(.normal) },
         ]
     }
 
@@ -381,9 +383,9 @@ final class AppModel {
             panel.state.newRelease = nil
             return
         }
-        releaseTimer = Timer.scheduledTimer(withTimeInterval: Self.firstReleaseCheckSeconds, repeats: false) { [weak self] _ in
+        releaseTimer = Timer.lenient(Self.firstReleaseCheckSeconds, repeats: false) { [weak self] in
             self?.checkForRelease()
-            self?.releaseTimer = Timer.scheduledTimer(withTimeInterval: Self.releaseCheckSeconds, repeats: true) { [weak self] _ in
+            self?.releaseTimer = Timer.lenient(Self.releaseCheckSeconds, repeats: true) { [weak self] in
                 self?.checkForRelease()
             }
         }
@@ -519,7 +521,7 @@ final class AppModel {
     private func followSignIn(_ id: String) {
         signInTimer?.invalidate()
         signInChecksLeft = Self.signInChecks
-        signInTimer = Timer.scheduledTimer(withTimeInterval: Self.signInCheckSeconds, repeats: true) { [weak self] _ in
+        signInTimer = Timer.lenient(Self.signInCheckSeconds, repeats: true) { [weak self] in
             self?.checkSignIn(id)
         }
     }
@@ -533,6 +535,16 @@ final class AppModel {
         }
         signInChecksLeft -= 1
         runUpdate(.limits, agents: [id])
+    }
+}
+
+/// Timers with a tenth of their interval as tolerance, so macOS can fire them
+/// together with other wake-ups and let the CPU sleep in between.
+extension Timer {
+    static func lenient(_ interval: TimeInterval, repeats: Bool, _ block: @escaping () -> Void) -> Timer {
+        let timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: repeats) { _ in block() }
+        timer.tolerance = interval / 10
+        return timer
     }
 }
 

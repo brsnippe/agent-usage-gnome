@@ -14,10 +14,25 @@ enum Theme {
     static let urgent = Color(hex: 0xC34043)
     static let stale = Color(hex: 0xC0A36E)
 
-    static let urgentNS = NSColor(red: 0xC3 / 255, green: 0x40 / 255, blue: 0x43 / 255, alpha: 1)
-    /// The robot while a session waits for you, and once one is done.
-    static let waitingNS = NSColor(red: 0xFF / 255, green: 0xA0 / 255, blue: 0x66 / 255, alpha: 1)
-    static let readyNS = NSColor(red: 0x98 / 255, green: 0xBB / 255, blue: 0x6C / 255, alpha: 1)
+    static let urgentNS = NSColor(hex: 0xC34043)
+    /// The robot while a session waits for you, and once one is done:
+    /// Kanagawa's wave colours on a dark menu bar, its lotus (light theme)
+    /// colours on a light one, where the wave ones are too pale to read.
+    static let waitingNS = barNS("agent-usage-waiting", light: 0xCC6D00, dark: 0xFFA066)
+    static let readyNS = barNS("agent-usage-ready", light: 0x6F894E, dark: 0x98BB6C)
+    /// The percentage while the numbers are from an earlier check: the bar's
+    /// text colour at GNOME's stale opacity.
+    static let fadedNS = NSColor(name: "agent-usage-faded") {
+        ($0.isDark ? NSColor.white : NSColor.black).withAlphaComponent(Panel.staleOpacity)
+    }
+
+    /// A menu bar colour that resolves when the bar draws it. The bar is light
+    /// or dark with the wallpaper behind it, not with the system setting, and
+    /// each screen's bar decides for itself, so a fixed colour can't suit them
+    /// all. A dynamic one is resolved per bar, as labelColor is.
+    static func barNS(_ name: String, light: UInt32, dark: UInt32) -> NSColor {
+        NSColor(name: name) { $0.isDark ? NSColor(hex: dark) : NSColor(hex: light) }
+    }
 
     static func sessionNS(_ session: TopBarSession) -> NSColor {
         switch session {
@@ -50,6 +65,29 @@ extension Color {
             blue: Double(hex & 0xFF) / 255
         )
     }
+}
+
+extension NSColor {
+    convenience init(hex: UInt32) {
+        self.init(
+            srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
+            green: CGFloat((hex >> 8) & 0xFF) / 255,
+            blue: CGFloat(hex & 0xFF) / 255,
+            alpha: 1
+        )
+    }
+
+    /// This colour as `appearance` draws it, fixed: for drawing it somewhere
+    /// other than the menu bar, like the snapshots.
+    func resolved(in appearance: NSAppearance) -> NSColor {
+        var color = self
+        appearance.performAsCurrentDrawingAppearance { color = NSColor(cgColor: cgColor) ?? self }
+        return color
+    }
+}
+
+extension NSAppearance {
+    var isDark: Bool { bestMatch(from: [.aqua, .darkAqua]) == .darkAqua }
 }
 
 /// The icons and fonts that build-app.sh puts in the app's Resources folder.
@@ -92,13 +130,16 @@ enum Assets {
             return image
         }
         let template = robot
-        // Drawn when it's shown, so it stays sharp on any screen.
+        // Drawn when it's shown, so it stays sharp on any screen, and in the
+        // appearance of the bar that shows it: a dynamic tint resolves here.
         let image = NSImage(size: template.size, flipped: false) { rect in
             template.draw(in: rect)
             tint.set()
             rect.fill(using: .sourceAtop)
             return true
         }
+        // Not cached, or one bar's colour could be kept for another's.
+        image.cacheMode = .never
         image.isTemplate = false
         tintedRobots[tint] = image
         return image
