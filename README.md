@@ -237,7 +237,8 @@ The robot shows what your Claude Code and OpenCode sessions want:
 - **Several sessions:** orange if any of them waits, green if any finished
   turn is unseen.
 - **Subagents:** one waiting for a permission turns the robot orange; one
-  finishing doesn't turn it green.
+  finishing doesn't turn it green. While background subagents work, the
+  session counts as working, not finished.
 - **Red:** a limit at 90% or more keeps the percentage red. The robot itself
   only turns red when no session wants anything.
 - **Left out:** sessions whose agent has quit (say, a closed terminal), and

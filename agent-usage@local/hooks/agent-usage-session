@@ -194,6 +194,10 @@ def claude_state(event: dict, current: dict):
         # alongside doesn't answer your permission prompt.
         if state == "waiting" and current.get("waitingFor", "") == agent:
             return "working", ""
+        # A background subagent still at work after the main agent's turn
+        # ended: the session isn't done until the turn that follows it is.
+        if state == "ready" and agent:
+            return "working", ""
         return None
     if name in ("Stop", "StopFailure"):
         return "ready", ""

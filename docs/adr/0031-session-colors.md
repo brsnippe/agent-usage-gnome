@@ -66,13 +66,19 @@ details:
   | State | Events |
   |---|---|
   | idle | `SessionStart` |
-  | working | `UserPromptSubmit`; `PostToolUse`, `PostToolUseFailure`, `ElicitationResult` end a wait |
+  | working | `UserPromptSubmit`; `PostToolUse`, `PostToolUseFailure`, `ElicitationResult` end a wait, and a subagent's end a ready |
   | waiting | `PermissionRequest`, `Elicitation`, `PreToolUse` for `AskUserQuestion` and `ExitPlanMode` |
   | ready | `Stop`, `StopFailure` |
   | gone | `SessionEnd` removes the file |
 
   - **Only the agent that waits ends the wait:** a subagent's tool finishing
     doesn't answer the main agent's permission prompt.
+  - **Background subagents keep a session working:** `Stop` ends the main
+    agent's turn, also when subagents it started in the background are
+    still at work. Their next tool call makes the session working again,
+    and the main agent's turn after they report back makes it ready.
+    Background shell commands fire no hooks while they run, so those still
+    show as ready (2026-10-15).
   - **The turn's edges run in the foreground:** a few hundredths of a second
     each. Only the tool events, which fire after every tool call, run in the
     background.
